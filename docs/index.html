@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PubTracker Compliance Report</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body { background: #f4f6f9; }
+
+    .hero {
+      background: linear-gradient(135deg, #003366 0%, #00509e 100%);
+      color: #fff;
+      padding: 1.75rem 0 1.5rem;
+      margin-bottom: 1.75rem;
+    }
+    .hero h1 { font-size: 1.5rem; font-weight: 700; }
+    .hero p  { font-size: 0.9rem; opacity: 0.8; }
+
+    .upload-card {
+      background: #fff;
+      border: 2px dashed #ced4da;
+      border-radius: 10px;
+      padding: 1.25rem;
+      transition: border-color .2s;
+    }
+    .upload-card:focus-within { border-color: #0d6efd; }
+
+    /* Sticky table header */
+    .tbl-wrap { max-height: 62vh; overflow: auto; }
+    .tbl-wrap table { font-size: 0.78rem; white-space: nowrap; }
+    .tbl-wrap thead th {
+      position: sticky; top: 0; z-index: 2;
+      background: #212529; color: #fff;
+      vertical-align: bottom; padding: 6px 8px;
+    }
+
+    .legend-dot {
+      display: inline-block; width: 13px; height: 13px;
+      border-radius: 3px; margin-right: 3px; vertical-align: middle;
+    }
+
+    #statusMsg { font-size: 0.88rem; }
+    .section-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+                     letter-spacing: .05em; color: #6c757d; }
+  </style>
+</head>
+<body>
+
+<!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="container-fluid px-4">
+    <h1>📊 PubTracker Compliance Report</h1>
+    <p class="mb-0">VA Researcher Publication Compliance · Automated Report Generator · All processing happens locally in your browser</p>
+  </div>
+</div>
+
+<div class="container-fluid px-4">
+
+  <!-- ── Step 1: Upload ──────────────────────────────────────────────────── -->
+  <div class="section-label mb-2">Step 1 — Upload data files</div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="upload-card h-100">
+        <div class="fw-semibold mb-1">PubTracker CSV</div>
+        <div class="text-muted small mb-2">Full-year export is fine — filtered to publications and selected quarter automatically.</div>
+        <input type="file" class="form-control form-control-sm" id="ptFile" accept=".csv" />
+        <div id="ptStatus" class="small mt-2 text-muted">No file selected</div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="upload-card h-100">
+        <div class="fw-semibold mb-1">VA Dimensions CSV</div>
+        <div class="text-muted small mb-2">Full-year export is fine — the app strips the metadata header rows and filters by quarter date range automatically.</div>
+        <input type="file" class="form-control form-control-sm" id="dimFile" accept=".csv" />
+        <div id="dimStatus" class="small mt-2 text-muted">No file selected</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Quarter selector (shown after PT upload) ───────────────── -->
+  <div id="quarterSelector" class="card mb-3 d-none border-primary">
+    <div class="card-body py-2 px-3">
+      <span class="section-label me-3">Step 2 — Select quarter(s)</span>
+      <div id="quarterChecks" class="d-inline"></div>
+    </div>
+  </div>
+
+  <!-- ── Options ────────────────────────────────────────────────────────── -->
+  <div class="mb-3">
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" id="inclPresentation" />
+      <label class="form-check-label small text-muted" for="inclPresentation">
+        Include "presentation" type submissions (SOP specifies publications only)
+      </label>
+    </div>
+  </div>
+
+  <!-- ── Status / Generate ──────────────────────────────────────────────── -->
+  <div id="statusMsg" class="alert d-none mb-3" role="alert"></div>
+
+  <button id="generateBtn" class="btn btn-primary px-4 mb-4" disabled>
+    Generate Compliance Report
+  </button>
+
+  <!-- ── Results ────────────────────────────────────────────────────────── -->
+  <div id="resultsSection" class="d-none">
+
+    <!-- Dimensions date-filter info -->
+    <div id="dimDateInfo" class="alert alert-info small d-none mb-3"></div>
+
+    <!-- Summary metric cards -->
+    <div class="section-label mb-2">Summary</div>
+    <div class="row g-2 mb-3" id="metricsRow"></div>
+
+    <!-- Download + legend -->
+    <div class="d-flex align-items-center flex-wrap gap-3 mb-2">
+      <div id="downloadButtons" class="d-none">
+        <button id="downloadCSV" class="btn btn-sm btn-outline-primary me-2">⬇ Download CSV</button>
+        <button id="downloadReport" class="btn btn-sm btn-outline-secondary">⬇ Download Summary Report</button>
+      </div>
+      <div class="small ms-auto">
+        <strong>% Entered:</strong>
+        <span class="legend-dot bg-danger"></span>0%
+        <span class="legend-dot bg-warning ms-2"></span>1–49%
+        <span class="legend-dot ms-2" style="background:#d4edda;border:1px solid #c3e6cb"></span>50–99%
+        <span class="legend-dot bg-success ms-2"></span>≥100%
+        <span class="legend-dot bg-secondary ms-2"></span>N/A
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="tbl-wrap border rounded bg-white">
+      <div id="resultsTable"></div>
+    </div>
+
+  </div><!-- /resultsSection -->
+
+  <!-- ── How-to accordion ───────────────────────────────────────────────── -->
+  <div class="accordion mt-4 mb-5" id="helpAccordion">
+    <div class="accordion-item border-0 shadow-sm">
+      <h2 class="accordion-header">
+        <button class="accordion-button collapsed py-2" type="button"
+                data-bs-toggle="collapse" data-bs-target="#helpBody">
+          ℹ️ How to use &amp; SOP notes
+        </button>
+      </h2>
+      <div id="helpBody" class="accordion-collapse collapse">
+        <div class="accordion-body small">
+          <ol class="mb-2">
+            <li><strong>PubTracker:</strong> Download the full current-year CSV from PubTracker — no pre-filtering needed. The app keeps only "publication" type rows and auto-detects VA fiscal quarters from the <em>Date Created</em> column.</li>
+            <li><strong>Dimensions:</strong> Export from VA Dimensions as CSV (full year is fine). The app automatically skips the metadata header rows Dimensions prepends, excludes Conference Abstracts and Correction Errata per SOP, and filters to the selected quarter's date range.</li>
+            <li><strong>Quarter:</strong> Choose the VA fiscal quarter(s) to report. <em>Q1 = Oct–Dec · Q2 = Jan–Mar · Q3 = Apr–Jun · Q4 = Jul–Sep</em></li>
+            <li><strong>Generate</strong> and download the compliance CSV or plain-text summary report.</li>
+          </ol>
+          <p class="mb-0 text-muted">🔒 All processing runs in your browser. No file data is sent to any server.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

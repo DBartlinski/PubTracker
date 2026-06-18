@@ -1,0 +1,64 @@
+PubTracker compliance report
+Data from PubTracker
+1. Download the Excel spreadsheet from PubTracker:
+https://vaww.pubtracker.research.va.gov/PubTracker/submissionlist.cfm?search=currentyear
+
+
+2. In the downloaded PubTracker spreadsheet:
+
+a. Under Submission Type remove everything that is not a Publication. 
+b. Based on the Date Created column, delete any rows out of the date range of interest.
+c. Remove unnecessary columns, keeping only: 
+Submitter Medical Center, 
+Submitter Medical Center Number, 
+Submitter VSIN, 
+POC Medical Center, 
+POC Medical Center Number, 
+POC VSIN, 
+Publication Date.
+d. Order by POC Medical Center Number
+The POC Medical Center Number is often more accurate than any other field of data. There will be many Alaska VA HCS under medical center because this is the first value in that field and is often skipped over, but users seem to more accurately enter the POC Medical Center Number. By the way, Alaska’s medical center number is 463.
+3. Excel can count the entered publications by medical center number:
+a. Copy the POC Medical Center Number column into a new tab in Excel
+b. Go to Data in the top ribbon and select Remove Duplicates
+
+
+c. Copy the list of unique center numbers back into the original tab.
+d. The formula is: =COUNTIF(e2:e2000,J2)
+
+What the formula does is count the number of times the unique medical center number found in column J appears in column E.
+e. Drag the formula down the column of med center numbers to get a count for each. Copy this column and then paste it again using Paste Values.
+4. These values can be transferred into the PubTracker Compliance running figures spreadsheet.
+Data from VA Dimensions
+1. Using the PubTracker Compliance running figures spreadsheet
+
+Create 3 new columns to capture the new quarters data: FYxx Qx PubTracker Count; FYxx Qx Dimensions Count; FYxx Qx % Entered.
+2. In VA Dimensions, https://va.dimensions.ai/discover/publication, use the Research Organization link to search for VAMC in the spreadsheet.
+
+
+3. The VAMC column has the VAMC name to use. Sometimes there are multiple entries separated by a semi-colon, in that case use both names. When you enter a VAMC, Dimensions will show matches, click on the checkbox and Add to search button
+
+4. Dimensions will show the publications for VAMC. Click Save/Export in the upper right and select Export.
+
+5. In the Export results box select:
+Export full record
+File format: XLSX – Excel
+Uncheck if you want: Send email
+Click Export
+
+6. Click your name in the top right of Dimensions and a menu will appear, select Export Center
+
+7. Download the spreadsheet and then open it
+8. The spreadsheet will open in MS Excel, click Enable Editing and delete row 1
+
+9. Column Q, Publication date, is primary interest. Delete any rows outside of the quarter of interest. 
+a. Once you have the rows in your quarter, look to column Z, Document Type. We are not interested in Conference Abstracts, Correction Erratum. 
+10. Now just count the rows and enter this into the FYxx Qx Dimensions Count column.
+11. Close the spreadsheet and onto the next VAMC.
+12. When there is more than one name in VAMC, enter the first and click the checkbox which will add that VAMC to the search
+
+Then click Clear Search and add the next name, click the checkbox and now both VAMC names are added to the search
+
+And you go through the spreadsheet as described above.
+13. There are a few VAMCs not found in Dimensions (this will be noted in parentheses) as of this writing but check with each new quarter to see if they have been added.
+14. The FYxx Qx % Entered column is simply PubTracker Count divided by Dimensions count.

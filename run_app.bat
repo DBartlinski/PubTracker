@@ -1,0 +1,6 @@
+@echo off
+echo Installing dependencies...
+pip install -r requirements.txt
+echo.
+echo Starting PubTracker Compliance App...
+streamlit run app.py
