@@ -66,8 +66,23 @@ def process_pubtracker(df, include_presentations=False):
 
     df = df[mask].copy()
 
-    # Parse Date Created
-    df['_date'] = pd.to_datetime(df['Date Created'], errors='coerce')
+    # Find date column: prefer "Date Created", fallback to "Publication Date"
+    date_col = next(
+        (c for c in df.columns if c.lower() == 'date created'),
+        None,
+    )
+    if not date_col:
+        date_col = next(
+            (c for c in df.columns if c.lower() == 'publication date'),
+            None,
+        )
+    if not date_col:
+        raise ValueError(
+            "Could not find 'Date Created' or 'Publication Date' column in PubTracker file."
+        )
+
+    # Parse date column
+    df['_date'] = pd.to_datetime(df[date_col], errors='coerce')
     df = df.dropna(subset=['_date'])
 
     info = {'excluded_types': excluded, 'total_kept': len(df)}

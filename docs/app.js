@@ -126,6 +126,11 @@ function parsePubTracker(csvText, includePresentation = false) {
   );
   if (!typeCol) throw new Error('Could not find submission type column in PubTracker file. Expected "Submittion Type" or "Submission Type".');
 
+  // Find date column: prefer "Date Created", fallback to "Publication Date"
+  const dateCol = fields.find(f => f.toLowerCase() === 'date created') ||
+                  fields.find(f => f.toLowerCase() === 'publication date');
+  if (!dateCol) throw new Error('Could not find "Date Created" or "Publication Date" column in PubTracker file.');
+
   const allowed = new Set(['publication']);
   if (includePresentation) allowed.add('presentation');
 
@@ -145,7 +150,7 @@ function parsePubTracker(csvText, includePresentation = false) {
   const quarterMeta = new Map(); // quarterKey -> {fy, q, label}
 
   kept.forEach(row => {
-    const d = parseDate(row['Date Created']);
+    const d = parseDate(row[dateCol]);
     if (!d) return;
     const { fy, q } = getFYQuarter(d);
     const key = quarterKey(fy, q);
