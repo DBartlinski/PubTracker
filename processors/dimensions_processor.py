@@ -99,24 +99,39 @@ def process_dimensions(df):
 
     pub_id_col = 'Publication ID' if 'Publication ID' in df.columns else df.columns[1]
 
-    # Collect date range info for UI display (informational only)
-    # Prefer publication date without online/print suffix, but accept them if that's all we have
-    pub_date_col = next(
-        (c for c in df.columns
-         if 'publication date' in c.lower()
-         and 'online' not in c.lower()
-         and 'print' not in c.lower()),
+    # Find publication date columns (try print, online, and generic variants)
+    pub_date_cols = [c for c in df.columns if 'publication date' in c.lower()]
+    pub_date_print = next((c for c in pub_date_cols if 'print' in c.lower()), None)
+    pub_date_online = next((c for c in pub_date_cols if 'online' in c.lower()), None)
+    pub_date_generic = next(
+        (c for c in pub_date_cols
+         if 'online' not in c.lower() and 'print' not in c.lower()),
         None,
     )
-    # Fallback: accept any "publication date" column
-    if not pub_date_col:
-        pub_date_col = next(
-            (c for c in df.columns if 'publication date' in c.lower()),
-            None,
-        )
+    
+    # Use whichever is available in priority order: generic > print > online
+    pub_date_col = pub_date_generic or pub_date_print or pub_date_online
+
+    # Helper: get the best available date from any of the columns
+    def get_row_date(row):
+        if pub_date_print:
+            d = _parse_pub_date(row.get(pub_date_print))
+            if not pd.isna(d):
+                return d
+        if pub_date_online:
+            d = _parse_pub_date(row.get(pub_date_online))
+            if not pd.isna(d):
+                return d
+        if pub_date_col:
+            d = _parse_pub_date(row.get(pub_date_col))
+            if not pd.isna(d):
+                return d
+        return pd.NaT
+
+    # Collect date range info for UI display (informational only)
     date_info = {'min_date': None, 'max_date': None, 'count': len(df)}
-    if pub_date_col:
-        dates = df[pub_date_col].apply(_parse_pub_date).dropna()
+    if pub_date_col or pub_date_print or pub_date_online:
+        dates = df.apply(get_row_date, axis=1).dropna()
         if not dates.empty:
             date_info['min_date'] = dates.min()
             date_info['max_date'] = dates.max()

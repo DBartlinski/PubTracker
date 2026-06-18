@@ -201,25 +201,34 @@ function parseDimensions(csvText, startDate = null, endDate = null) {
 
   const pubIdCol = fields.includes('Publication ID') ? 'Publication ID' : fields[1];
 
-  // Publication date column – prefer one without online/print suffix, but accept them if that's all we have
-  let pubDateCol = fields.find(f =>
+  // Publication date column – try to find both print and online variants
+  const pubDatePrint = fields.find(f => f.toLowerCase() === 'publication date (print)');
+  const pubDateOnline = fields.find(f => f.toLowerCase() === 'publication date (online)');
+  const pubDateGeneral = fields.find(f =>
     f.toLowerCase().includes('publication date') &&
     !f.toLowerCase().includes('online') &&
     !f.toLowerCase().includes('print')
   );
-  // Fallback: accept any "publication date" column
-  if (!pubDateCol) {
-    pubDateCol = fields.find(f => f.toLowerCase().includes('publication date'));
-  }
+  
+  // Use whichever is available in priority order: general > print > online
+  let pubDateCol = pubDateGeneral || pubDatePrint || pubDateOnline;
 
   // Remove excluded document types
   let rows = parsed.data.filter(row =>
     !EXCLUDED_DOC_TYPES.has((row['Document Type'] || '').trim().toLowerCase())
   );
 
+  // Helper: get the best available date from print or online columns
+  const getRowDate = (row) => {
+    let d = pubDatePrint ? parseDate(row[pubDatePrint]) : null;
+    if (!d && pubDateOnline) d = parseDate(row[pubDateOnline]);
+    if (!d && pubDateCol) d = parseDate(row[pubDateCol]);
+    return d;
+  };
+
   // Collect overall date stats (before filtering)
   const allDates = rows
-    .map(row => pubDateCol ? parseDate(row[pubDateCol]) : null)
+    .map(row => getRowDate(row))
     .filter(Boolean);
   const totalCount = rows.length;
   const minDate = allDates.length ? new Date(Math.min(...allDates)) : null;
@@ -228,8 +237,7 @@ function parseDimensions(csvText, startDate = null, endDate = null) {
   // Apply quarter date filter if requested
   if (startDate && endDate) {
     rows = rows.filter(row => {
-      if (!pubDateCol) return true;
-      const d = parseDate(row[pubDateCol]);
+      const d = getRowDate(row);
       if (!d) return true;   // keep rows with no parseable date
       return d >= startDate && d <= endDate;
     });
