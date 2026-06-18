@@ -188,7 +188,18 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
 
     # ── Results table ────────────────────────────────────────────────────────
     st.subheader('Compliance Table')
-    st.dataframe(result_df, width='stretch', height=560, hide_index=True)
+    
+    # Apply styling to highlight compliance percentages
+    def style_compliance(val):
+        """Color cells based on compliance: green for positive (+), red for negative (-)."""
+        if isinstance(val, str) and val.startswith('+'):
+            return 'background-color: #d4edda; color: #155724; font-weight: 600'
+        elif isinstance(val, str) and val.startswith('-'):
+            return 'background-color: #f8d7da; color: #721c24; font-weight: 600'
+        return ''
+    
+    styled_df = result_df.style.applymap(style_compliance, subset=[col for col in result_df.columns if '% Entered' in col])
+    st.dataframe(styled_df, width='stretch', height=560, hide_index=True)
 
     # ── Downloads ────────────────────────────────────────────────────────────
     st.subheader('Download Results')

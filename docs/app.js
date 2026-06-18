@@ -341,10 +341,8 @@ function pctCssClass(pct, notInDim, ptCount, dimCount) {
   if (!pct) return 'pct-undefined';  // PT > 0 but Dimensions = 0
   const val = parseInt(pct, 10);
   if (isNaN(val)) return '';
-  if (val === 0)   return 'table-danger';
-  if (val < 50)    return 'table-warning';
-  if (val < 100)   return 'pct-partial';
-  return 'table-success';
+  if (val >= 100)  return 'pct-positive';  // Compliant (>=100%) - green
+  return 'pct-negative';  // Non-compliant (<100%) - red
 }
 
 function escHtml(str) {
@@ -381,9 +379,11 @@ function renderTable(rows, quarters) {
       const pct    = row[`${label}_pct`] ?? '';
       const notIn  = row[`${label}_notInDim`];
       const cls    = pctCssClass(pct, notIn, pt, dim);
+      const pctVal = pct && !notIn && !(pt === 0 && dim === 0) ? parseInt(pct, 10) : null;
+      const pctDisplay = pctVal !== null ? (pctVal >= 100 ? '+' : '-') + pct : pct;
       tb += `<td class="text-end">${pt}</td>`;
       tb += `<td class="text-end">${dim}</td>`;
-      tb += `<td class="text-end ${cls}">${pct}</td>`;
+      tb += `<td class="text-end ${cls}">${pctDisplay}</td>`;
     });
     tb += '</tr>';
   });
@@ -410,7 +410,13 @@ function generateCSV(rows, quarters) {
     quarters.forEach(({ label }) => {
       r.push(row[`${label}_pt`]  ?? '');
       r.push(row[`${label}_dim`] ?? '');
-      r.push(row[`${label}_pct`] ?? '');
+      const pct = row[`${label}_pct`] ?? '';
+      const notIn = row[`${label}_notInDim`];
+      const pt = row[`${label}_pt`] ?? 0;
+      const dim = row[`${label}_dim`] ?? 0;
+      const pctVal = pct && !notIn && !(pt === 0 && dim === 0) ? parseInt(pct, 10) : null;
+      const pctDisplay = pctVal !== null ? (pctVal >= 100 ? '+' : '-') + pct : pct;
+      r.push(pctDisplay);
     });
     csvRows.push(r);
   });
@@ -434,9 +440,14 @@ function generateReport(rows, quarters) {
     lines.push('', `${label} SUMMARY`, dash);
 
     if (totalRow) {
+      const totalPct = totalRow[`${label}_pct`] || '';
+      const totalPtVal = totalRow[`${label}_pt`] || 0;
+      const totalDimVal = totalRow[`${label}_dim`] || 0;
+      const totalPctNum = totalPct && !(totalPtVal === 0 && totalDimVal === 0) ? parseInt(totalPct, 10) : null;
+      const totalPctDisplay = totalPctNum !== null ? (totalPctNum >= 100 ? '+' : '-') + totalPct : totalPct;
       lines.push(`  Total PubTracker submissions : ${totalRow[`${label}_pt`]}`);
       lines.push(`  Total Dimensions publications: ${totalRow[`${label}_dim`]}`);
-      lines.push(`  Overall % Entered            : ${totalRow[`${label}_pct`]}`);
+      lines.push(`  Overall % Entered            : ${totalPctDisplay}`);
     }
 
     // Top 10 by PubTracker count
@@ -448,7 +459,13 @@ function generateReport(rows, quarters) {
         const name = row.vamc.slice(0, 52).padEnd(52);
         const pt   = String(row[`${label}_pt`] || 0).padStart(5);
         const dim  = String(row[`${label}_dim`] || 0).padStart(5);
-        const pct  = String(row[`${label}_pct`] || '').padStart(6);
+        const pctRaw = row[`${label}_pct`] || '';
+        const notIn = row[`${label}_notInDim`];
+        const ptVal = row[`${label}_pt`] || 0;
+        const dimVal = row[`${label}_dim`] || 0;
+        const pctNum = pctRaw && !notIn && !(ptVal === 0 && dimVal === 0) ? parseInt(pctRaw, 10) : null;
+        const pctDisplay = pctNum !== null ? (pctNum >= 100 ? '+' : '-') + pctRaw : pctRaw;
+        const pct  = String(pctDisplay).padStart(7);
         lines.push(`  ${name} PT:${pt}  DIM:${dim}  ${pct}`);
       });
 

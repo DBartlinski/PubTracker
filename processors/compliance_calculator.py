@@ -72,6 +72,31 @@ def get_search_terms(vamc_display):
 
 
 # ---------------------------------------------------------------------------
+# Helper: Format compliance percentage
+# ---------------------------------------------------------------------------
+
+def format_compliance_pct(pct_str):
+    """
+    Format a percentage string with +/- prefix based on compliance.
+    
+    Parameters
+    ----------
+    pct_str : str
+        Percentage string like "100%" or "45%"
+    
+    Returns
+    -------
+    str
+        Formatted percentage like "+100%" (compliant) or "-45%" (non-compliant)
+    """
+    if not pct_str or pct_str == '':
+        return ''
+    val = int(pct_str.rstrip('%'))
+    prefix = '+' if val >= 100 else '-'
+    return f"{prefix}{pct_str}"
+
+
+# ---------------------------------------------------------------------------
 # Counting helpers
 # ---------------------------------------------------------------------------
 
@@ -184,6 +209,9 @@ def calculate_compliance(pt_counts, dim_pub_list, vamc_ref=None):
                 pct = ''
             else:
                 pct = f"{round(pt_count / dim_count * 100)}%"
+            
+            # Format with +/- prefix
+            pct = format_compliance_pct(pct)
 
             row[f'{label} PubTracker Count'] = pt_count
             row[f'{label} Dimensions Count'] = dim_count
@@ -199,6 +227,8 @@ def calculate_compliance(pt_counts, dim_pub_list, vamc_ref=None):
         total_pt = sum(r.get(f'{label} PubTracker Count', 0) for r in rows)
         total_dim = sum(r.get(f'{label} Dimensions Count', 0) for r in rows)
         total_pct = f"{round(total_pt / total_dim * 100)}%" if total_dim > 0 else ''
+        # Format with +/- prefix
+        total_pct = format_compliance_pct(total_pct)
         total_row[f'{label} PubTracker Count'] = total_pt
         total_row[f'{label} Dimensions Count'] = total_dim
         total_row[f'{label} % Entered'] = total_pct
