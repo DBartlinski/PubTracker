@@ -10,18 +10,25 @@ EXCLUDED_DOC_TYPES = {'conference abstract', 'correction erratum'}
 def _parse_pub_date(date_str):
     """
     Parse a Dimensions publication date string.
-    Handles YYYY-MM-DD, YYYY-MM, and YYYY formats.
+    Handles YYYY-MM-DD, YYYY-MM, YYYY, MM/DD/YYYY, and DD/MM/YYYY formats.
     Returns a pandas Timestamp or NaT.
     """
     if pd.isna(date_str) or str(date_str).strip() == '':
         return pd.NaT
     s = str(date_str).strip()
-    for fmt in ('%Y-%m-%d', '%Y-%m', '%Y'):
+    
+    # Try common formats in order
+    for fmt in ('%Y-%m-%d', '%Y-%m', '%Y', '%m/%d/%Y', '%d/%m/%Y'):
         try:
             return pd.to_datetime(s, format=fmt)
         except ValueError:
             continue
-    return pd.NaT
+    
+    # Fallback: let pandas try to infer the format
+    try:
+        return pd.to_datetime(s, infer_datetime_format=True)
+    except:
+        return pd.NaT
 
 
 def read_dimensions_df(raw_bytes):

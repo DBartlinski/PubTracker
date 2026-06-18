@@ -23,13 +23,33 @@ let resultRows        = [];  // final compliance table rows
 function parseDate(str) {
   if (!str) return null;
   const s = str.toString().trim();
-  const datePart = s.split(/[ T]/)[0]; // handle "2026-03-31 17:41:56" and "2026-03-31T..."
+  
+  // Try YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS format
+  const datePart = s.split(/[ T]/)[0]; // "2026-03-31" from "2026-03-31 17:41:56"
   if (/^\d{4}-\d{2}-\d{2}$/.test(datePart))
     return new Date(datePart + 'T12:00:00Z');
   if (/^\d{4}-\d{2}$/.test(datePart))
     return new Date(datePart + '-15T12:00:00Z');
   if (/^\d{4}$/.test(datePart))
     return new Date(datePart + '-07-01T12:00:00Z');
+  
+  // Try MM/DD/YYYY format (common in US exports)
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(datePart)) {
+    const [m, d, y] = datePart.split('/');
+    return new Date(Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0));
+  }
+  
+  // Try DD/MM/YYYY format
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(datePart)) {
+    const parts = datePart.split('/');
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[0], 10);
+    const y = parseInt(parts[2], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    }
+  }
+  
   return null;
 }
 
