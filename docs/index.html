@@ -86,9 +86,9 @@
     </div>
     <div class="col-md-6">
       <div class="upload-card h-100">
-        <div class="fw-semibold mb-1">VA Dimensions CSV</div>
-        <div class="text-muted small mb-2">Full-year export is fine — the app strips the metadata header rows and filters by quarter date range automatically.</div>
-        <input type="file" class="form-control form-control-sm" id="dimFile" accept=".csv" />
+        <div class="fw-semibold mb-1">VA Dimensions CSV <span class="badge bg-secondary fw-normal" style="font-size:0.7rem">multiple files OK</span></div>
+        <div class="text-muted small mb-2">Upload one or more Dimensions exports — they will be merged and deduplicated automatically. Conference abstracts and correction errata are excluded per SOP.</div>
+        <input type="file" class="form-control form-control-sm" id="dimFile" accept=".csv" multiple />
         <div id="dimStatus" class="small mt-2 text-muted">No file selected</div>
       </div>
     </div>
@@ -132,15 +132,14 @@
     <!-- Download + legend -->
     <div class="d-flex align-items-center flex-wrap gap-3 mb-2">
       <div id="downloadButtons" class="d-none">
-        <button id="downloadCSV" class="btn btn-sm btn-outline-primary me-2">⬇ Download CSV</button>
-        <button id="downloadReport" class="btn btn-sm btn-outline-secondary">⬇ Download Summary Report</button>
+        <button id="downloadCSV" class="btn btn-sm btn-outline-primary me-2">⬇ Download CSV (all quarters)</button>
+        <button id="downloadReport" class="btn btn-sm btn-outline-secondary me-2">⬇ Download Summary Report</button>
+        <span id="quarterDownloads"></span>
       </div>
       <div class="small ms-auto">
         <strong>% Entered:</strong>
-        <span class="legend-dot bg-danger"></span>0%
-        <span class="legend-dot bg-warning ms-2"></span>1–49%
-        <span class="legend-dot ms-2" style="background:#d4edda;border:1px solid #c3e6cb"></span>50–99%
-        <span class="legend-dot bg-success ms-2"></span>≥100%
+        <span class="legend-dot" style="background:#f8d7da;border:1px solid #f5c6cb"></span><span style="color:#721c24">− Below 100%</span>
+        <span class="legend-dot ms-2" style="background:#d4edda;border:1px solid #c3e6cb"></span><span style="color:#155724">+ At or above 100%</span>
         <span class="legend-dot bg-secondary ms-2"></span>N/A
       </div>
     </div>
@@ -165,7 +164,7 @@
         <div class="accordion-body small">
           <ol class="mb-2">
             <li><strong>PubTracker:</strong> Download the full current-year CSV from PubTracker — no pre-filtering needed. The app keeps only "publication" type rows and auto-detects VA fiscal quarters from the <em>Date Created</em> column.</li>
-            <li><strong>Dimensions:</strong> Export from VA Dimensions as CSV (full year is fine). The app automatically skips the metadata header rows Dimensions prepends, excludes Conference Abstracts and Correction Errata per SOP, and filters to the selected quarter's date range.</li>
+            <li><strong>Dimensions:</strong> Export from VA Dimensions as CSV. You can upload <strong>multiple files</strong> — the app merges them and deduplicates by Publication ID. Excludes Conference Abstracts and Correction Errata per SOP. Tip: if Dimensions caps exports at 500, export in batches by adjusting the date range and upload all files at once.</li>
             <li><strong>Quarter:</strong> Choose the VA fiscal quarter(s) to report. <em>Q1 = Oct–Dec · Q2 = Jan–Mar · Q3 = Apr–Jun · Q4 = Jul–Sep</em></li>
             <li><strong>Generate</strong> and download the compliance CSV or plain-text summary report.</li>
           </ol>
