@@ -201,12 +201,16 @@ function parseDimensions(csvText, startDate = null, endDate = null) {
 
   const pubIdCol = fields.includes('Publication ID') ? 'Publication ID' : fields[1];
 
-  // Publication date column (primary, not online/print variants)
-  const pubDateCol = fields.find(f =>
+  // Publication date column – prefer one without online/print suffix, but accept them if that's all we have
+  let pubDateCol = fields.find(f =>
     f.toLowerCase().includes('publication date') &&
     !f.toLowerCase().includes('online') &&
     !f.toLowerCase().includes('print')
   );
+  // Fallback: accept any "publication date" column
+  if (!pubDateCol) {
+    pubDateCol = fields.find(f => f.toLowerCase().includes('publication date'));
+  }
 
   // Remove excluded document types
   let rows = parsed.data.filter(row =>

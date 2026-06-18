@@ -100,6 +100,7 @@ def process_dimensions(df):
     pub_id_col = 'Publication ID' if 'Publication ID' in df.columns else df.columns[1]
 
     # Collect date range info for UI display (informational only)
+    # Prefer publication date without online/print suffix, but accept them if that's all we have
     pub_date_col = next(
         (c for c in df.columns
          if 'publication date' in c.lower()
@@ -107,6 +108,12 @@ def process_dimensions(df):
          and 'print' not in c.lower()),
         None,
     )
+    # Fallback: accept any "publication date" column
+    if not pub_date_col:
+        pub_date_col = next(
+            (c for c in df.columns if 'publication date' in c.lower()),
+            None,
+        )
     date_info = {'min_date': None, 'max_date': None, 'count': len(df)}
     if pub_date_col:
         dates = df[pub_date_col].apply(_parse_pub_date).dropna()
