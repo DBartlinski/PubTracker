@@ -5,47 +5,72 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>VA Publications Dashboard — Documentation</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Bitter:wght@600;700&display=swap" rel="stylesheet" />
 <style>
+  :root {
+    --va-primary: #005ea2;
+    --va-primary-dark: #1a4480;
+    --va-primary-darker: #162e51;
+    --va-text: #1b1b1b;
+    --va-muted: #71767a;
+    --va-border: #dfe1e2;
+    --va-bg-muted: #f0f0f0;
+    --va-warning: #ffbe2e;
+    --va-warning-dark: #e5a000;
+    --va-warning-lighter: #faf3d1;
+    --va-warning-darker: #936f38;
+  }
   html { scroll-behavior: smooth; }
-  body { background: #f4f6f9; }
+  body { background: #f4f6f9; font-family: 'Source Sans 3', 'Source Sans Pro', Helvetica, Arial, sans-serif; color: var(--va-text); }
+  h1, h2, h3, h4, h5, h6 { font-family: Bitter, Georgia, 'Times New Roman', serif; }
+  .gov-banner { background: var(--va-bg-muted); color: var(--va-text); font-size: .78rem; padding: .35rem 0; border-bottom: 1px solid var(--va-border); }
   .hero {
-    background: linear-gradient(135deg, #1f4d3d 0%, #236b56 100%);
+    background: var(--va-primary-darker);
     color: #fff;
     padding: 1.75rem 0 1.5rem;
     margin-bottom: 1.5rem;
+    border-bottom: 4px solid var(--va-primary);
   }
   .hero h1 { font-size: 1.5rem; font-weight: 700; }
-  .hero p { font-size: 0.9rem; opacity: 0.85; }
-  .section-card { background: #fff; border: 1px solid #e2e6e3; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+  .hero p { font-size: 0.9rem; opacity: 0.9; }
+  .section-card { background: #fff; border: 1px solid var(--va-border); border-radius: 4px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
   .disclaimer-card {
-    background: #fff8ec; border: 1px solid #f0dfb8; border-left: 4px solid #ca8a2c;
-    border-radius: 6px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .9rem; color: #5c4a1e;
+    background: var(--va-warning-lighter); border: 1px solid var(--va-warning); border-left: 4px solid var(--va-warning-dark);
+    border-radius: 4px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .9rem; color: var(--va-warning-darker);
   }
   .disclaimer-card strong { color: #3f3115; }
-  .caption-note { color: #6c757d; font-size: .88rem; }
-  h2 { font-size: 1.25rem; font-weight: 700; color: #1f2d27; border-bottom: 2px solid #d9e2dc; padding-bottom: .4rem; margin-top: 0; scroll-margin-top: 90px; }
-  h3 { font-size: 1.05rem; font-weight: 700; color: #236b56; margin-top: 1.25rem; }
-  h2 .anchor-link { font-size: .8rem; color: #9fb0a8; text-decoration: none; margin-left: .5rem; }
-  dt { font-weight: 600; color: #1f2d27; }
+  .caption-note { color: var(--va-muted); font-size: .88rem; }
+  h2 { font-size: 1.25rem; font-weight: 700; color: var(--va-primary-darker); border-bottom: 2px solid var(--va-border); padding-bottom: .4rem; margin-top: 0; scroll-margin-top: 90px; }
+  h3 { font-size: 1.05rem; font-weight: 700; color: var(--va-primary); margin-top: 1.25rem; }
+  h2 .anchor-link { font-size: .8rem; color: var(--va-muted); text-decoration: none; margin-left: .5rem; }
+  dt { font-weight: 600; color: var(--va-primary-darker); }
   dd { margin-bottom: .6rem; color: #3d4d46; }
   pre.diagram {
-    background: #1f2d27; color: #d9e8e0; padding: 1rem; border-radius: 6px;
+    background: var(--va-primary-darker); color: #d9e8f6; padding: 1rem; border-radius: 4px;
     font-size: .78rem; overflow-x: auto; line-height: 1.5;
   }
-  code.inline { background: #eef2ef; color: #236b56; padding: .1rem .3rem; border-radius: 4px; font-size: .88em; }
+  code.inline { background: #eef2ef; color: var(--va-primary-dark); padding: .1rem .3rem; border-radius: 4px; font-size: .88em; }
   .toc-card {
-    position: sticky; top: 1rem; background: #fff; border: 1px solid #e2e6e3; border-radius: 8px;
+    position: sticky; top: 1rem; background: #fff; border: 1px solid var(--va-border); border-radius: 4px;
     padding: 1rem 1.1rem; font-size: .85rem;
   }
   .toc-card .nav-link { color: #3d4d46; padding: .2rem 0; }
-  .toc-card .nav-link:hover { color: #236b56; }
-  .toc-card h6 { text-transform: uppercase; font-size: .72rem; letter-spacing: .04em; color: #6c757d; }
-  table.ref-table th { background: #212529; color: #fff; font-size: .8rem; }
+  .toc-card .nav-link:hover { color: var(--va-primary); }
+  .toc-card h6 { text-transform: uppercase; font-size: .72rem; letter-spacing: .04em; color: var(--va-muted); }
+  table.ref-table th { background: var(--va-primary-darker); color: #fff; font-size: .8rem; }
   table.ref-table td, table.ref-table th { font-size: .82rem; vertical-align: top; }
-  footer.page-footer { color: #6c757d; font-size: .82rem; padding: 1.5rem 0 2rem; }
+  footer.page-footer { color: var(--va-muted); font-size: .82rem; padding: 1.5rem 0 2rem; }
+  footer.page-footer a { color: var(--va-primary); }
 </style>
 </head>
 <body>
+
+<div class="gov-banner">
+  <div class="container-fluid px-4 d-flex align-items-center gap-2">
+    <span aria-hidden="true">🇺🇸</span>
+    <span>An official website of the United States government</span>
+  </div>
+</div>
 
 <div class="hero">
   <div class="container-fluid px-4 d-flex justify-content-between align-items-center flex-wrap">

@@ -78,7 +78,7 @@ function destroyChart(id) {
   if (charts[id]) { charts[id].destroy(); delete charts[id]; }
 }
 
-function barChart(canvasId, labels, data, color = '#236b56') {
+function barChart(canvasId, labels, data, color = '#005ea2') {
   destroyChart(canvasId);
   const ctx = document.getElementById(canvasId).getContext('2d');
   charts[canvasId] = new Chart(ctx, {
@@ -95,7 +95,7 @@ function barChart(canvasId, labels, data, color = '#236b56') {
   });
 }
 
-function horizontalBarChart(canvasId, labels, data, color = '#236b56') {
+function horizontalBarChart(canvasId, labels, data, color = '#005ea2') {
   destroyChart(canvasId);
   const ctx = document.getElementById(canvasId).getContext('2d');
   charts[canvasId] = new Chart(ctx, {
@@ -216,14 +216,14 @@ function renderOverview() {
   const docTypeCounts = {};
   filtered.forEach(p => { const t = p.docType || 'Unknown'; docTypeCounts[t] = (docTypeCounts[t] || 0) + 1; });
   const topDocTypes = Object.entries(docTypeCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  barChart('chartDocTypes', topDocTypes.map(e => e[0]), topDocTypes.map(e => e[1]), '#b4553d');
+  barChart('chartDocTypes', topDocTypes.map(e => e[0]), topDocTypes.map(e => e[1]), '#bd5727');
 
   facilitiesChartPage = 0;
   renderTopFacilitiesChart();
   renderOverviewPortfolioChart();
 
   const assigned = filtered.filter(p => p.fiscalPeriod && p.fiscalPeriod !== 'Unavailable').length;
-  barChart('chartFyCoverage', ['Assigned', 'Unavailable'], [assigned, total - assigned], '#5f6b85');
+  barChart('chartFyCoverage', ['Assigned', 'Unavailable'], [assigned, total - assigned], '#71767a');
 }
 
 function renderOverviewPortfolioChart() {
@@ -238,7 +238,7 @@ function renderOverviewPortfolioChart() {
 
   const labels = combined.map(e => e.label);
   const data = combined.map(e => e.count);
-  const colors = combined.map(e => (e.type === 'broad' ? '#236b56' : '#b4553d'));
+  const colors = combined.map(e => (e.type === 'broad' ? '#005ea2' : '#bd5727'));
   horizontalBarChart('chartOrdOverview', labels, data, colors);
 }
 
@@ -358,7 +358,7 @@ function renderOrdPortfolios() {
   const ampCounts = {};
   filtered.forEach(p => (p.ordAmp || []).forEach(name => { ampCounts[name] = (ampCounts[name] || 0) + 1; }));
   const ampEntries = AMP_ORDER.filter(n => ampCounts[n]).map(n => [n, ampCounts[n]]);
-  barChart('chartOrdAmp', ampEntries.map(e => e[0]), ampEntries.map(e => e[1]), '#b4553d');
+  barChart('chartOrdAmp', ampEntries.map(e => e[0]), ampEntries.map(e => e[1]), '#bd5727');
 
   const facilityByPub = {};
   filteredMatches.forEach(m => { (facilityByPub[m.pubId] = facilityByPub[m.pubId] || []).push(m.facility); });
@@ -423,7 +423,7 @@ function renderImpact() {
     else if (v <= 50) bins[5]++;
     else bins[6]++;
   });
-  barChart('chartCitations', ['0', '1–2', '3–5', '6–10', '11–25', '26–50', '51–100+'], bins, '#5f6b85');
+  barChart('chartCitations', ['0', '1–2', '3–5', '6–10', '11–25', '26–50', '51–100+'], bins, '#71767a');
 }
 
 // ============================================================
