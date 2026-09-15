@@ -220,9 +220,26 @@ function renderOverview() {
 
   facilitiesChartPage = 0;
   renderTopFacilitiesChart();
+  renderOverviewPortfolioChart();
 
   const assigned = filtered.filter(p => p.fiscalPeriod && p.fiscalPeriod !== 'Unavailable').length;
   barChart('chartFyCoverage', ['Assigned', 'Unavailable'], [assigned, total - assigned], '#5f6b85');
+}
+
+function renderOverviewPortfolioChart() {
+  const broadCounts = {};
+  filtered.forEach(p => (p.ordBroad || []).forEach(name => { broadCounts[name] = (broadCounts[name] || 0) + 1; }));
+  const ampCounts = {};
+  filtered.forEach(p => (p.ordAmp || []).forEach(name => { ampCounts[name] = (ampCounts[name] || 0) + 1; }));
+
+  const broadEntries = BROAD_PORTFOLIO_ORDER.filter(n => broadCounts[n]).map(n => ({ label: n, count: broadCounts[n], type: 'broad' }));
+  const ampEntries = AMP_ORDER.filter(n => ampCounts[n]).map(n => ({ label: n, count: ampCounts[n], type: 'amp' }));
+  const combined = [...broadEntries, ...ampEntries].sort((a, b) => b.count - a.count);
+
+  const labels = combined.map(e => e.label);
+  const data = combined.map(e => e.count);
+  const colors = combined.map(e => (e.type === 'broad' ? '#236b56' : '#b4553d'));
+  horizontalBarChart('chartOrdOverview', labels, data, colors);
 }
 
 function renderTopFacilitiesChart() {

@@ -33,6 +33,22 @@
     .chart-wrap.chart-wrap-tall { height: 420px; }
     canvas { display: block; }
     .caption-note { color: #6c757d; font-size: .82rem; }
+    .disclaimer-card {
+      background: #fff8ec; border: 1px solid #f0dfb8; border-left: 4px solid #ca8a2c;
+      border-radius: 6px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .85rem; color: #5c4a1e;
+    }
+    .disclaimer-card strong { color: #3f3115; }
+    .metric-explainer {
+      background: #f0f4f2; border: 1px solid #d9e2dc; border-radius: 6px;
+      padding: .6rem .8rem; margin-bottom: .75rem; font-size: .8rem; color: #3d4d46;
+    }
+    .metric-explainer dt { font-weight: 600; color: #1f2d27; }
+    .metric-explainer dd { margin-bottom: .35rem; }
+    .info-icon {
+      display: inline-block; width: 15px; height: 15px; line-height: 14px; text-align: center;
+      border-radius: 50%; background: #236b56; color: #fff; font-size: .68rem; font-style: normal;
+      cursor: help; margin-left: 4px;
+    }
   </style>
 </head>
 <body>
@@ -52,6 +68,13 @@
   <div id="loadError" class="alert alert-danger d-none"></div>
 
   <div id="dashboardRoot" class="d-none">
+    <div class="disclaimer-card">
+      <strong>About this data:</strong> Records are exported from Dimensions (third-party bibliometric database), filtered to the
+      current VA fiscal year and VA-affiliated orgs. Conference abstracts/corrections are excluded by default. Facility matches
+      are name-based text evidence, not authoritative. ORD portfolio tags are inferred estimates, not official VA data.
+      Citation/RCR/FCR reflect Dimensions' data as of export time. Treat all figures as directional, for internal review only.
+    </div>
+
     <!-- Filters -->
     <div class="section-card">
       <div class="row g-2 align-items-end">
@@ -96,9 +119,37 @@
 
     <div id="tab-overview" class="tab-pane">
       <div class="row g-3 mb-3" id="overviewMetrics"></div>
+      <details class="metric-explainer">
+        <summary>What do these numbers mean?</summary>
+        <dl class="mt-2 mb-0 row">
+          <dt class="col-sm-3">Publications</dt><dd class="col-sm-9">Total records passing the current filters (fiscal year, facility, portfolio, search, SOP-eligibility).</dd>
+          <dt class="col-sm-3">Mapped to a VAMC</dt><dd class="col-sm-9">Publications with at least one name-based facility match (see Facilities tab). A match is evidence for review, not a confirmed assignment.</dd>
+          <dt class="col-sm-3">Unmatched</dt><dd class="col-sm-9">Publications with no facility match — either the org name didn't resemble any VAMC in our reference list, or the record isn't tied to a specific local facility.</dd>
+          <dt class="col-sm-3">Open access</dt><dd class="col-sm-9">Share of publications Dimensions marks as freely available (Gold, Green, Hybrid, or Bronze), as opposed to paywalled ("Closed").</dd>
+        </dl>
+      </details>
       <div class="row g-3">
-        <div class="col-md-7"><div class="section-card"><h6>VA fiscal-year trend</h6><div class="chart-wrap"><canvas id="chartFyTrend"></canvas></div></div></div>
-        <div class="col-md-5"><div class="section-card"><h6>Document types</h6><div class="chart-wrap"><canvas id="chartDocTypes"></canvas></div></div></div>
+        <div class="col-md-7"><div class="section-card"><h6>VA fiscal-year trend</h6><p class="caption-note">Publication count by VA fiscal year (Oct–Sep), based on the derived canonical publication date.</p><div class="chart-wrap"><canvas id="chartFyTrend"></canvas></div></div></div>
+        <div class="col-md-5"><div class="section-card"><h6>Document types</h6><p class="caption-note">Top 10 Dimensions document types (e.g., Article, Preprint, Review Article) among the filtered records.</p><div class="chart-wrap"><canvas id="chartDocTypes"></canvas></div></div></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-12">
+          <div class="section-card">
+            <h6>Publications by ORD portfolio</h6>
+            <p class="caption-note">
+              Combines both portfolio dimensions in one view: <strong>Broad Portfolios</strong> (funding-service evidence,
+              e.g. Medical Health, Health Systems Research) and <strong>Actively Managed Portfolios</strong> (topic-keyword
+              evidence, e.g. Suicide Prevention, TBI). A publication can appear in more than one bar if it carries multiple
+              tags, so totals here will not sum to the publication count above.
+            </p>
+            <div class="chart-wrap chart-wrap-tall"><canvas id="chartOrdOverview"></canvas></div>
+            <div class="mt-2 small">
+              <span class="caption-note"><span style="display:inline-block;width:10px;height:10px;background:#236b56;border-radius:2px;"></span> Broad Portfolio</span>
+              &nbsp;&nbsp;
+              <span class="caption-note"><span style="display:inline-block;width:10px;height:10px;background:#b4553d;border-radius:2px;"></span> Actively Managed Portfolio</span>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="row g-3">
         <div class="col-md-8">
@@ -111,12 +162,14 @@
                 <button id="facilitiesChartNext" class="btn btn-sm btn-outline-secondary">Next 10</button>
               </div>
             </div>
+            <p class="caption-note">Publications matched per VAMC (see Facilities tab for match strength), sorted highest to lowest, 10 at a time.</p>
             <div class="chart-wrap chart-wrap-tall"><canvas id="chartTopFacilities"></canvas></div>
           </div>
         </div>
-        <div class="col-md-4"><div class="section-card"><h6>Fiscal-period coverage</h6><div class="chart-wrap"><canvas id="chartFyCoverage"></canvas></div></div></div>
+        <div class="col-md-4"><div class="section-card"><h6>Fiscal-period coverage</h6><p class="caption-note">Whether each publication could be assigned a VA fiscal quarter. "Unavailable" means only a publication year (no month/day) was available.</p><div class="chart-wrap"><canvas id="chartFyCoverage"></canvas></div></div></div>
       </div>
     </div>
+
 
     <div id="tab-records" class="tab-pane d-none">
       <div class="section-card">
@@ -124,6 +177,7 @@
           <h6 class="mb-0">Publication records</h6>
           <button id="btnDownloadCsv" class="btn btn-sm btn-outline-success">Download filtered CSV</button>
         </div>
+        <p class="caption-note">One row per publication passing the current filters. "Facilities" lists all name-matched VAMCs; "Fiscal period" reflects the canonical publication date (print date preferred, then online, then general). The download button exports exactly the rows and filters currently shown, including ORD tags.</p>
         <div class="tbl-wrap">
           <table class="table table-sm table-striped table-hover">
             <thead><tr>
@@ -147,6 +201,14 @@
       <div class="section-card">
         <h6>Facility attribution</h6>
         <p class="caption-note">Matches are name-based evidence for review, not authoritative assignments. Station 101 umbrella terms are excluded.</p>
+        <details class="metric-explainer">
+          <summary>What do the columns mean?</summary>
+          <dl class="mt-2 mb-0 row">
+            <dt class="col-sm-3">Publications</dt><dd class="col-sm-9">Unique publications with at least one match to this facility (a publication can match more than one facility).</dd>
+            <dt class="col-sm-3">Strong</dt><dd class="col-sm-9">The facility's search term (e.g., "Ann Arbor") was found inside the publication's organization name — the more reliable match direction.</dd>
+            <dt class="col-sm-3">Weak</dt><dd class="col-sm-9">The reverse — the publication's organization name was found inside the facility's search term. Less reliable; short/generic terms can cause false positives.</dd>
+          </dl>
+        </details>
         <div class="tbl-wrap">
           <table class="table table-sm table-striped">
             <thead><tr><th>Facility</th><th>Station numbers</th><th>Publications</th><th>Strong</th><th>Weak</th></tr></thead>
@@ -166,12 +228,52 @@
         </p>
       </div>
       <div class="row g-3 mb-3" id="ordMetrics"></div>
+      <details class="metric-explainer" open>
+        <summary>How to read these four numbers</summary>
+        <dl class="mt-2 mb-0 row">
+          <dt class="col-sm-3">Publications</dt>
+          <dd class="col-sm-9">Total records passing the current filters — the denominator for the three percentages below.</dd>
+          <dt class="col-sm-3">With Broad Portfolio evidence</dt>
+          <dd class="col-sm-9">Publications where we found a VA grant award prefix (e.g., CX, BX, RX, HX) or an explicit VA
+            research-service name (e.g., "Health Systems Research") in the funding or acknowledgement text. This is the
+            <strong>higher-confidence</strong> signal — treat it as "likely VA-funded via this service," not a certainty.</dd>
+          <dt class="col-sm-3">With Actively Managed tag</dt>
+          <dd class="col-sm-9">Publications where the title, abstract, or MeSH terms matched keywords for one of the six
+            Actively Managed Portfolios (e.g., "traumatic brain injury," "suicide prevention"). This is <strong>lower-confidence</strong>
+            than Broad Portfolio evidence — it reflects the paper's subject matter, not confirmed VA funding, and a paper can
+            match on subject alone with no VA funding tie at all.</dd>
+          <dt class="col-sm-3">No ORD signal detected</dt>
+          <dd class="col-sm-9">Publications with neither a Broad Portfolio nor an Actively Managed tag. This is <strong>expected
+            to be the majority</strong> of records: most publications in this dataset simply have a VA-affiliated author and are
+            not VA-funded research, so there is nothing in the text for our detector to find. A high count here is normal, not
+            a data quality problem.</dd>
+        </dl>
+        <p class="caption-note mt-2 mb-0">
+          <strong>Interpretation guidance:</strong> A publication can have both a Broad Portfolio and an Actively Managed tag,
+          only one, or neither — the three "with" categories are not mutually exclusive and will not sum to the total.
+          Use Broad Portfolio numbers when you need a defensible funding-service estimate; use Actively Managed numbers only
+          as a directional signal of topic volume, not as a funding claim.
+        </p>
+      </details>
       <div class="row g-3">
-        <div class="col-md-6"><div class="section-card"><h6>Broad Portfolio (VA funding service)</h6><div class="chart-wrap"><canvas id="chartOrdBroad"></canvas></div></div></div>
-        <div class="col-md-6"><div class="section-card"><h6>Actively Managed Portfolio (topic)</h6><div class="chart-wrap"><canvas id="chartOrdAmp"></canvas></div></div></div>
+        <div class="col-md-6">
+          <div class="section-card">
+            <h6>Broad Portfolio (VA funding service)</h6>
+            <p class="caption-note">Count of publications with each Broad Portfolio tag. Bars can overlap (a publication with two tags counts in two bars), so bars will not sum to "With Broad Portfolio evidence" above.</p>
+            <div class="chart-wrap"><canvas id="chartOrdBroad"></canvas></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="section-card">
+            <h6>Actively Managed Portfolio (topic)</h6>
+            <p class="caption-note">Count of publications matching each Actively Managed Portfolio's keywords. Same overlap caveat applies — these are topic matches, not confirmed funding.</p>
+            <div class="chart-wrap"><canvas id="chartOrdAmp"></canvas></div>
+          </div>
+        </div>
       </div>
       <div class="section-card">
         <h6>Broad Portfolio by facility</h6>
+        <p class="caption-note">For publications with both a facility match and a Broad Portfolio tag, counts how many publications link each facility to each portfolio. A publication with multiple facilities or portfolios contributes to multiple rows.</p>
         <div class="tbl-wrap">
           <table class="table table-sm table-striped">
             <thead><tr><th>Facility</th><th>Broad Portfolio</th><th>Publications</th></tr></thead>
@@ -182,10 +284,26 @@
     </div>
 
     <div id="tab-impact" class="tab-pane d-none">
+      <div class="section-card">
+        <p class="caption-note mb-0">
+          Metrics are computed by Dimensions, not calculated locally, across the currently filtered records. Times cited =
+          raw citation count at export time. RCR/FCR = field-normalized citation scores (1.0 = average for that field).
+          Citation counts naturally grow with publication age — use for context, not to rank research quality.
+        </p>
+      </div>
       <div class="row g-3 mb-3" id="impactMetrics"></div>
+      <details class="metric-explainer">
+        <summary>What do these numbers mean?</summary>
+        <dl class="mt-2 mb-0 row">
+          <dt class="col-sm-3">Median citations</dt><dd class="col-sm-9">The middle value of "Times cited" across filtered publications; half have more citations, half have fewer. Median (not mean) is used here because a few highly-cited papers can otherwise skew the average.</dd>
+          <dt class="col-sm-3">Mean RCR</dt><dd class="col-sm-9">Average Relative Citation Ratio. 1.0 = typical citation performance for the paper's field and age; above 1.0 is above-average, below 1.0 is below-average. "N/A" means no filtered records have an RCR value.</dd>
+          <dt class="col-sm-3">Mean FCR</dt><dd class="col-sm-9">Average Field Citation Ratio, Dimensions' own field-normalized measure, interpreted the same way as RCR (1.0 = average).</dd>
+          <dt class="col-sm-3">Unique journals</dt><dd class="col-sm-9">Count of distinct journal/source titles among the filtered publications.</dd>
+        </dl>
+      </details>
       <div class="row g-3">
-        <div class="col-md-6"><div class="section-card"><h6>Top journals</h6><div class="chart-wrap"><canvas id="chartJournals"></canvas></div></div></div>
-        <div class="col-md-6"><div class="section-card"><h6>Citation distribution</h6><div class="chart-wrap"><canvas id="chartCitations"></canvas></div></div></div>
+        <div class="col-md-6"><div class="section-card"><h6>Top journals</h6><p class="caption-note">The 15 journals publishing the most filtered records — a measure of where VA-affiliated research appears, not of journal quality.</p><div class="chart-wrap"><canvas id="chartJournals"></canvas></div></div></div>
+        <div class="col-md-6"><div class="section-card"><h6>Citation distribution</h6><p class="caption-note">How many publications fall into each citation-count bucket. Citation counts are capped for display at 100+; newer publications will naturally cluster at the low end regardless of eventual impact.</p><div class="chart-wrap"><canvas id="chartCitations"></canvas></div></div></div>
       </div>
     </div>
   </div>
