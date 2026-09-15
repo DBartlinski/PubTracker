@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VA Publications Dashboard — Documentation</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<style>
+  html { scroll-behavior: smooth; }
+  body { background: #f4f6f9; }
+  .hero {
+    background: linear-gradient(135deg, #1f4d3d 0%, #236b56 100%);
+    color: #fff;
+    padding: 1.75rem 0 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .hero h1 { font-size: 1.5rem; font-weight: 700; }
+  .hero p { font-size: 0.9rem; opacity: 0.85; }
+  .section-card { background: #fff; border: 1px solid #e2e6e3; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+  .disclaimer-card {
+    background: #fff8ec; border: 1px solid #f0dfb8; border-left: 4px solid #ca8a2c;
+    border-radius: 6px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .9rem; color: #5c4a1e;
+  }
+  .disclaimer-card strong { color: #3f3115; }
+  .caption-note { color: #6c757d; font-size: .88rem; }
+  h2 { font-size: 1.25rem; font-weight: 700; color: #1f2d27; border-bottom: 2px solid #d9e2dc; padding-bottom: .4rem; margin-top: 0; scroll-margin-top: 90px; }
+  h3 { font-size: 1.05rem; font-weight: 700; color: #236b56; margin-top: 1.25rem; }
+  h2 .anchor-link { font-size: .8rem; color: #9fb0a8; text-decoration: none; margin-left: .5rem; }
+  dt { font-weight: 600; color: #1f2d27; }
+  dd { margin-bottom: .6rem; color: #3d4d46; }
+  pre.diagram {
+    background: #1f2d27; color: #d9e8e0; padding: 1rem; border-radius: 6px;
+    font-size: .78rem; overflow-x: auto; line-height: 1.5;
+  }
+  code.inline { background: #eef2ef; color: #236b56; padding: .1rem .3rem; border-radius: 4px; font-size: .88em; }
+  .toc-card {
+    position: sticky; top: 1rem; background: #fff; border: 1px solid #e2e6e3; border-radius: 8px;
+    padding: 1rem 1.1rem; font-size: .85rem;
+  }
+  .toc-card .nav-link { color: #3d4d46; padding: .2rem 0; }
+  .toc-card .nav-link:hover { color: #236b56; }
+  .toc-card h6 { text-transform: uppercase; font-size: .72rem; letter-spacing: .04em; color: #6c757d; }
+  table.ref-table th { background: #212529; color: #fff; font-size: .8rem; }
+  table.ref-table td, table.ref-table th { font-size: .82rem; vertical-align: top; }
+  footer.page-footer { color: #6c757d; font-size: .82rem; padding: 1.5rem 0 2rem; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="container-fluid px-4 d-flex justify-content-between align-items-center flex-wrap">
+    <div>
+      <h1>📄 VA Publications Dashboard — Documentation</h1>
+      <p class="mb-0">Scope, development history, architecture, data refresh steps, interpretation guidance, and disclaimers.</p>
+    </div>
+    <a href="./dashboard.html" class="btn btn-outline-light btn-sm">← Back to Dashboard</a>
+  </div>
+</div>
+
+<div class="container-fluid px-4">
+  <div class="row">
+    <div class="col-lg-3 mb-4">
+      <nav class="toc-card">
+        <h6>Contents</h6>
+        <ul class="nav flex-column">
+          <li class="nav-item"><a class="nav-link" href="#purpose-scope">1. Purpose and Scope</a></li>
+          <li class="nav-item"><a class="nav-link" href="#development-history">2. Development History</a></li>
+          <li class="nav-item"><a class="nav-link" href="#architecture">3. System Architecture &amp; Data Pipeline</a></li>
+          <li class="nav-item"><a class="nav-link" href="#file-reference">4. File &amp; Component Reference</a></li>
+          <li class="nav-item"><a class="nav-link" href="#refresh-data">5. How to Refresh the Data</a></li>
+          <li class="nav-item"><a class="nav-link" href="#interpret-dashboard">6. How to Read the Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="#facility-methodology">7. Facility Attribution Methodology</a></li>
+          <li class="nav-item"><a class="nav-link" href="#ord-methodology">8. ORD Portfolio Tagging Methodology</a></li>
+          <li class="nav-item"><a class="nav-link" href="#limitations">9. Known Limitations &amp; Disclaimers</a></li>
+          <li class="nav-item"><a class="nav-link" href="#troubleshooting">10. Troubleshooting</a></li>
+          <li class="nav-item"><a class="nav-link" href="#changelog">11. Change Log</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="col-lg-9">
+
+      <section id="purpose-scope" class="section-card">
+        <h2>1. Purpose and Scope <a class="anchor-link" href="#purpose-scope">#</a></h2>
+        <p>This project is a reporting layer built on top of the existing PubTracker-Dev compliance toolkit. It answers a different question than the compliance report does:</p>
+        <ul>
+          <li><strong>The Compliance Report</strong> (<code class="inline">app.py</code> / <code class="inline">docs/index.html</code>) answers: <em>"Did the VAMC/investigator submit this publication to PubTracker as required?"</em> It compares PubTracker submissions against Dimensions publications, per VAMC, per fiscal quarter.</li>
+          <li><strong>The Publications Dashboard</strong> (<code class="inline">dashboard.py</code> / <code class="inline">docs/dashboard.html</code>) answers: <em>"What does VA-affiliated research output actually look like?"</em> It is an exploration tool over the full Dimensions export: records, facilities, citations, and an estimate of which VA Office of Research and Development (ORD) portfolio each publication is associated with.</li>
+        </ul>
+        <p>Two implementations exist and are kept in sync:</p>
+        <ul>
+          <li>A Streamlit app (<code class="inline">dashboard.py</code>) for internal/local use with Python installed.</li>
+          <li>A static, client-side web app (<code class="inline">docs/dashboard.html</code> + <code class="inline">docs/dashboard.js</code>) published to GitHub Pages, shareable via a URL with no local setup. All processing happens in the visitor's browser; no data is uploaded to a server.</li>
+        </ul>
+        <h3>Why the ORD portfolio piece was added</h3>
+        <p>Leadership wanted to know which VA ORD research portfolio (e.g., Health Systems Research, Rehabilitation R&amp;D, Suicide Prevention) each publication falls under. Dimensions does not carry an ORD field, and PubTracker only has this information for the subset of publications VA staff manually submitted. To get broader coverage, an automated text-based estimator was built (see Section 8) that infers ORD portfolio from VA grant award numbers and topic keywords already present in the Dimensions export.</p>
+        <h3>Who this is for</h3>
+        <p>VA research office staff and leadership who need a directional view of research output, facility attribution, and portfolio mix. It is explicitly <strong>not</strong> a system of record — see Section 9, Disclaimers.</p>
+      </section>
+
+      <section id="development-history" class="section-card">
+        <h2>2. Development History (How This Was Built, Start to Finish) <a class="anchor-link" href="#development-history">#</a></h2>
+        <p class="caption-note">This section documents the actual build sequence so future maintainers understand why things are structured the way they are.</p>
+
+        <h3>Step 1 — Data acquisition (pre-existing, reused as-is)</h3>
+        <p><code class="inline">dimensions_batch_export.py</code> automates a Playwright browser session against va.dimensions.ai to export every publication under the Veterans Health Administration research-organization filter. Dimensions caps every export job at 500 records and truncates silently past that, so the exporter must partition the full result set into disjoint batches (by publication_type, document_type, open_access_status, and research_org peeling) that are each ≤500 records, submit them one at a time, download the resulting CSVs, and merge + deduplicate by Publication ID. A verified 2026-09-15 run produced 27,283 VA-scoped publications (2025+2026) across 92 batches with zero duplicates after merge, then a fiscal-year window filter was applied to produce the "filtered_2025-10-01_to_2026-09-30.csv" file (17,000 records) that the dashboard currently reads.</p>
+
+        <h3>Step 2 — Dashboard data preparation (<code class="inline">processors/dashboard_data.py</code>)</h3>
+        <p>Built to take the raw Dimensions export and turn it into an analysis-ready table:</p>
+        <ul>
+          <li>Parses/repairs the Dimensions CSV export format (metadata header rows, BOM handling) via <code class="inline">processors/dimensions_processor.py</code>.</li>
+          <li>Derives a single "Canonical Date" per publication by trying print date, then online date, then a general date field, and records which precision (day/month/year-only) was achieved.</li>
+          <li>Converts canonical dates into VA fiscal year/quarter labels, reusing the fiscal-quarter logic originally written for the compliance tool.</li>
+          <li>Flags SOP-eligible records (conference abstracts and corrections are excluded from official reporting by policy, but are still viewable if a toggle is switched on).</li>
+          <li>Cross-references "Research Organizations - standardized" against <code class="inline">data/vamc_reference.csv</code> to build a facility-match evidence table (see Section 7).</li>
+        </ul>
+
+        <h3>Step 3 — ORD portfolio tagging (<code class="inline">processors/ord_portfolio.py</code>)</h3>
+        <p>Added after research confirmed (via research.va.gov) that ORD's four legacy "services" were renamed to four "Broad Portfolios" with unchanged underlying grant-award-number prefixes, and that ORD separately runs six cross-cutting "Actively Managed Portfolios." A regex-based tagger was built to scan each publication's funding/acknowledgement/affiliation text for grant prefixes and service names (Broad Portfolio, higher confidence) and each publication's title/abstract/MeSH terms for topic keywords (Actively Managed Portfolio, lower confidence). This was wired directly into the dashboard data pipeline so every dashboard load is automatically tagged with no separate step required.</p>
+        <p>A standalone script, <code class="inline">tag_ord_portfolios.py</code>, exists to run the tagger in isolation and print a coverage summary (useful for QA / leadership reporting without opening the dashboard).</p>
+
+        <h3>Step 4 — Streamlit dashboard (<code class="inline">dashboard.py</code>)</h3>
+        <p>A five-tab Streamlit app was built on top of the prepared data: Overview, Records, Facilities, ORD Portfolios, and Research Impact. Filters (fiscal year, facility, ORD Broad/Actively Managed Portfolio, document type, open access, journal, research area, country, free-text search) are shared across all tabs via a sidebar. A filtered-CSV download is provided on the Records tab.</p>
+
+        <h3>Step 5 — Static (GitHub Pages) dashboard (<code class="inline">docs/dashboard.html</code> + <code class="inline">docs/dashboard.js</code>)</h3>
+        <p>To make the dashboard shareable without requiring Python or local setup, a client-side JavaScript re-implementation was built with feature parity to the Streamlit version:</p>
+        <ul>
+          <li><code class="inline">build_static_dashboard_data.py</code> runs the same Python data pipeline and exports two slim JSON files (<code class="inline">docs/data/publications.json</code> and <code class="inline">docs/data/facility_matches.json</code>) containing only the fields the page needs to render (no abstracts/funding text, to keep the payload small — roughly 21 MB combined for 17,000 records / ~16,000 facility matches).</li>
+          <li><code class="inline">docs/dashboard.html</code>/<code class="inline">js</code> is vanilla JavaScript + Chart.js (loaded from a CDN), with no build step and no server-side component. All filtering, aggregation, and charting happens in the browser after the two JSON files are fetched once on page load.</li>
+          <li>The existing GitHub Actions workflow (<code class="inline">.github/workflows/pages.yml</code>) already deploys the entire <code class="inline">docs/</code> folder to GitHub Pages on every push to main, so no new deployment infrastructure was needed.</li>
+        </ul>
+
+        <h3>Step 6 — Usability fixes and iteration</h3>
+        <ul>
+          <li>The "Top facilities" chart was originally a vertical bar chart with 100+ overlapping labels; it was changed to a paginated (10-at-a-time) horizontal bar chart with Prev/Next controls.</li>
+          <li>A latent Chart.js resize-loop issue (canvases without a fixed-height wrapper and without <code class="inline">maintainAspectRatio:false</code>) was fixed across all charts on the static page for stability.</li>
+          <li>Disclaimer banners and per-metric "explainer" panels (see Section 6) were added after review, so the dashboard proactively answers likely questions about data provenance and how each number was calculated, rather than requiring a follow-up conversation.</li>
+        </ul>
+      </section>
+
+      <section id="architecture" class="section-card">
+        <h2>3. System Architecture and Data Pipeline <a class="anchor-link" href="#architecture">#</a></h2>
+<pre class="diagram">  [Dimensions.ai website]
+         |  (dimensions_batch_export.py - Playwright automation)
+         v
+  output/dimensions_va_2025_2026/*.csv  (raw batch exports, merged + deduped)
+         |
+         v
+  dimensions_va_2025_2026_filtered_2025-10-01_to_2026-09-30.csv
+  (fiscal-year-window subset; this is the file both dashboards read)
+         |
+         |  processors/dimensions_processor.py::read_dimensions_df()
+         |  (strips Dimensions metadata header, handles BOM)
+         v
+  processors/dashboard_data.py::load_dashboard_dataset()
+         |  - prepare_publications(): canonical dates, fiscal periods,
+         |    SOP-eligibility flag, open-access flag, DOI/PubMed/Dimensions
+         |    links
+         |  - build_facility_matches(): name-match evidence vs. VAMC
+         |    reference list
+         |  - add_facility_summary(): rolls matches up per publication
+         |  - tag_publications() [processors/ord_portfolio.py]: ORD Broad
+         |    Portfolio + Actively Managed Portfolio tags
+         v
+  DashboardDataset (publications DataFrame + facility_matches DataFrame)
+         |
+         +---------------------------+
+         |                           |
+         v                           v
+  dashboard.py                build_static_dashboard_data.py
+  (Streamlit, local use)      (exports docs/data/*.json)
+                                     |
+                                     v
+                              docs/dashboard.html + dashboard.js
+                              (GitHub Pages, browser-side rendering)</pre>
+      </section>
+
+      <section id="file-reference" class="section-card">
+        <h2>4. File and Component Reference <a class="anchor-link" href="#file-reference">#</a></h2>
+
+        <h3>Data acquisition</h3>
+        <table class="table ref-table table-sm table-striped">
+          <tbody>
+            <tr><td><code class="inline">dimensions_batch_export.py</code></td><td>Playwright automation that exports the full VA-scoped Dimensions publication set.</td></tr>
+            <tr><td><code class="inline">run_dimensions_export.bat</code></td><td>One-click launcher for the above.</td></tr>
+            <tr><td><code class="inline">DIMENSIONS_EXPORT.md</code></td><td>Operating instructions for the exporter.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Data processing (shared library, importable by both dashboards)</h3>
+        <table class="table ref-table table-sm table-striped">
+          <tbody>
+            <tr><td><code class="inline">processors/dimensions_processor.py</code></td><td>Reads/repairs raw Dimensions CSV.</td></tr>
+            <tr><td><code class="inline">processors/dashboard_data.py</code></td><td>Builds the analysis-ready dataset: dates, fiscal periods, SOP flags, facility matches.</td></tr>
+            <tr><td><code class="inline">processors/ord_portfolio.py</code></td><td>ORD Broad/Actively Managed Portfolio tagging (regex-based).</td></tr>
+            <tr><td><code class="inline">processors/compliance_calculator.py</code></td><td>Shared fiscal-quarter and facility name-matching helpers (originally built for the compliance tool, reused here).</td></tr>
+            <tr><td><code class="inline">data/vamc_reference.csv</code></td><td>Master list of ~140 VAMCs, station numbers, and search terms used for facility matching.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Streamlit dashboard</h3>
+        <table class="table ref-table table-sm table-striped">
+          <tbody>
+            <tr><td><code class="inline">dashboard.py</code></td><td>Five-tab Streamlit app (Overview, Records, Facilities, ORD Portfolios, Research impact).</td></tr>
+            <tr><td><code class="inline">run_dashboard.bat</code></td><td>One-click launcher.</td></tr>
+            <tr><td><code class="inline">test_dashboard_data.py</code></td><td>Unit tests plus an optional reconciliation check against a known real dataset.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Static (GitHub Pages) dashboard</h3>
+        <table class="table ref-table table-sm table-striped">
+          <tbody>
+            <tr><td><code class="inline">build_static_dashboard_data.py</code></td><td>Generates <code class="inline">docs/data/publications.json</code> and <code class="inline">docs/data/facility_matches.json</code>.</td></tr>
+            <tr><td><code class="inline">docs/dashboard.html</code></td><td>Markup, styles, and all explainer text for the static dashboard.</td></tr>
+            <tr><td><code class="inline">docs/dashboard.js</code></td><td>All client-side logic: filtering, aggregation, chart rendering, CSV export.</td></tr>
+            <tr><td><code class="inline">docs/data/publications.json</code></td><td>Generated data (not hand-edited).</td></tr>
+            <tr><td><code class="inline">docs/data/facility_matches.json</code></td><td>Generated data (not hand-edited).</td></tr>
+            <tr><td><code class="inline">docs/data/meta.json</code></td><td>Generation metadata (source file name, record counts).</td></tr>
+            <tr><td><code class="inline">.github/workflows/pages.yml</code></td><td>Existing CI job that deploys <code class="inline">docs/</code> to GitHub Pages on every push to main.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Standalone / QA scripts</h3>
+        <table class="table ref-table table-sm table-striped">
+          <tbody>
+            <tr><td><code class="inline">tag_ord_portfolios.py</code></td><td>Runs ORD tagging in isolation and prints a coverage report (useful without opening a dashboard).</td></tr>
+            <tr><td><code class="inline">validate_dimensions_csv.py</code></td><td>Ad hoc validation of a Dimensions export (date range, duplicate IDs, null checks).</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="refresh-data" class="section-card">
+        <h2>5. How to Refresh the Data (Step by Step) <a class="anchor-link" href="#refresh-data">#</a></h2>
+
+        <h3>Full refresh (new Dimensions export)</h3>
+        <ol>
+          <li>Run <code class="inline">run_dimensions_export.bat</code>. A visible Chromium window opens; log in to Dimensions when prompted. The tool partitions, submits, downloads, validates, and merges automatically. This can take a while for large result sets (dozens of export jobs).</li>
+          <li>Confirm the output under <code class="inline">output/dimensions_va_2025_2026/</code> (or <code class="inline">output/dimensions_batches/</code> for the original run) looks correct — check the printed record counts match Dimensions' own totals.</li>
+          <li>If a fiscal-year window filter is needed, produce (or update) the "..._filtered_&lt;start&gt;_to_&lt;end&gt;.csv" file referenced by both dashboards.</li>
+          <li>Update <code class="inline">DATA_PATH</code> in <code class="inline">dashboard.py</code> and <code class="inline">SOURCE_CSV</code> in <code class="inline">build_static_dashboard_data.py</code> and <code class="inline">tag_ord_portfolios.py</code> if the filename changed.</li>
+        </ol>
+
+        <h3>Refresh the Streamlit dashboard</h3>
+        <p>Nothing else to do. <code class="inline">dashboard.py</code> reads the CSV directly and re-runs the full pipeline (including ORD tagging) on every load, cached by file modification time.</p>
+
+        <h3>Refresh the static (GitHub Pages) dashboard</h3>
+        <ol>
+          <li>Run: <code class="inline">python build_static_dashboard_data.py</code> — this regenerates <code class="inline">docs/data/publications.json</code> and <code class="inline">docs/data/facility_matches.json</code> from the current source CSV.</li>
+          <li>Commit and push <code class="inline">docs/data/*.json</code> (and any <code class="inline">docs/dashboard.html</code>/<code class="inline">js</code> changes) to the main branch.</li>
+          <li>The existing GitHub Actions workflow deploys automatically — no manual deployment step. Check the "Actions" tab on GitHub to confirm the "Deploy to GitHub Pages" run succeeded.</li>
+        </ol>
+
+        <h3>Re-run ORD tagging only (no dashboard changes)</h3>
+        <p><code class="inline">python tag_ord_portfolios.py</code> — prints a coverage summary (percent of records with Broad Portfolio evidence, percent with an Actively Managed tag, per-portfolio counts) and writes a tagged CSV alongside the source file for manual review.</p>
+      </section>
+
+      <section id="interpret-dashboard" class="section-card">
+        <h2>6. How to Read and Interpret the Dashboard <a class="anchor-link" href="#interpret-dashboard">#</a></h2>
+        <p class="caption-note">The dashboard itself now contains inline explainers for every metric and chart (an amber "About this data" banner at the top, and collapsible "What do these numbers mean?" panels under each metrics row). This section is a condensed reference of the same guidance for offline reading.</p>
+
+        <h3>Overview tab</h3>
+        <dl class="row">
+          <dt class="col-sm-3">Publications</dt><dd class="col-sm-9">Count of records passing the current filters.</dd>
+          <dt class="col-sm-3">Mapped to a VAMC</dt><dd class="col-sm-9">Records with ≥1 name-based facility match. Evidence for review, not a confirmed assignment.</dd>
+          <dt class="col-sm-3">Unmatched</dt><dd class="col-sm-9">Records with no facility match.</dd>
+          <dt class="col-sm-3">Open access</dt><dd class="col-sm-9">Share of records Dimensions marks as freely available (Gold/Green/Hybrid/Bronze vs. Closed).</dd>
+          <dt class="col-sm-3">VA fiscal-year trend</dt><dd class="col-sm-9">Publication count per VA fiscal year, based on the canonical publication date.</dd>
+          <dt class="col-sm-3">Document types</dt><dd class="col-sm-9">Top 10 Dimensions document types.</dd>
+          <dt class="col-sm-3">Publications by ORD portfolio</dt><dd class="col-sm-9">Combined view of Broad Portfolio and Actively Managed Portfolio counts, color-coded. Bars do not sum to the publication count because a record can carry more than one tag, or none.</dd>
+          <dt class="col-sm-3">Top facilities</dt><dd class="col-sm-9">Publications matched per VAMC, paginated 10 at a time, highest first.</dd>
+          <dt class="col-sm-3">Fiscal-period coverage</dt><dd class="col-sm-9">Whether a usable fiscal quarter could be derived (records with only a publication year cannot be placed reliably relative to the October fiscal-year boundary and are marked "Unavailable").</dd>
+        </dl>
+
+        <h3>Records tab</h3>
+        <p>One row per filtered publication, with links out to DOI/PubMed/Dimensions. The CSV download exports exactly the filtered rows shown, including ORD tags, for use outside the dashboard.</p>
+
+        <h3>Facilities tab</h3>
+        <dl class="row">
+          <dt class="col-sm-3">Publications</dt><dd class="col-sm-9">Unique publications matched to that facility (a publication can match more than one facility).</dd>
+          <dt class="col-sm-3">Strong</dt><dd class="col-sm-9">The facility's search term was found inside the publication's organization name — the more reliable match direction.</dd>
+          <dt class="col-sm-3">Weak</dt><dd class="col-sm-9">The reverse: the organization name was found inside the facility's search term. Less reliable; short/generic facility names can produce false positives.</dd>
+        </dl>
+
+        <h3>ORD Portfolios tab (the most important section to read carefully)</h3>
+        <dl class="row">
+          <dt class="col-sm-3">Publications</dt><dd class="col-sm-9">Total filtered records (the denominator for the three figures below).</dd>
+          <dt class="col-sm-3">With Broad Portfolio evidence</dt><dd class="col-sm-9">Records where a VA grant award prefix (CX, BX, RX, HX) or an explicit VA research-service name was found in the funding/acknowledgement text. <strong>Higher confidence</strong>: treat as "likely VA-funded via this service," not a certainty.</dd>
+          <dt class="col-sm-3">With Actively Managed tag</dt><dd class="col-sm-9">Records where title/abstract/MeSH terms matched keywords for one of the six Actively Managed Portfolios. <strong>Lower confidence</strong>: reflects subject matter only, not confirmed VA funding.</dd>
+          <dt class="col-sm-3">No ORD signal detected</dt><dd class="col-sm-9">Records with neither tag. <strong>Expected to be the majority</strong>, because most records in this dataset simply have a VA-affiliated author and are not VA-funded research. A high number here is normal, not a data-quality problem.</dd>
+        </dl>
+        <p class="caption-note">Important: the three "with" categories overlap (a record can have both, one, or neither) and will not sum to the total. Use Broad Portfolio numbers for a defensible funding-service estimate; use Actively Managed numbers only as a directional topic-volume signal.</p>
+
+        <h3>Research Impact tab</h3>
+        <p class="caption-note">All values are computed by Dimensions, not locally, and reflect Dimensions' data as of the export date, not real time.</p>
+        <dl class="row">
+          <dt class="col-sm-3">Median citations</dt><dd class="col-sm-9">Middle value of "Times cited"; median (not mean) is used because a few highly-cited papers would otherwise skew an average.</dd>
+          <dt class="col-sm-3">Mean RCR / Mean FCR</dt><dd class="col-sm-9">Field- and year-normalized citation scores; 1.0 = average performance for that field, above/below 1.0 = above/below average. "N/A" means no filtered records have a value.</dd>
+          <dt class="col-sm-3">Unique journals</dt><dd class="col-sm-9">Distinct journal/source titles among filtered records.</dd>
+        </dl>
+        <p class="caption-note">Citation counts and RCR/FCR naturally grow with publication age — use for context, not to rank research quality, and especially do not compare very recent publications against older ones on this basis.</p>
+      </section>
+
+      <section id="facility-methodology" class="section-card">
+        <h2>7. Facility Attribution Methodology <a class="anchor-link" href="#facility-methodology">#</a></h2>
+        <p>Facility matching reuses the same approach as the compliance tool:</p>
+        <ol>
+          <li>Each VAMC in <code class="inline">data/vamc_reference.csv</code> has one or more "search terms" derived from its display name (parenthetical location/AKA notes are stripped; multi-name VAMCs separated by ";" produce multiple terms).</li>
+          <li>Each publication's "Research Organizations - standardized" field (semicolon-separated) is compared against every VAMC's search terms using case-insensitive substring matching in both directions:
+            <ul>
+              <li><strong>"Strong" match</strong>: the VAMC's search term is found inside the publication's organization name (e.g., "Ann Arbor" found inside "University of Michigan Ann Arbor VA Medical Center").</li>
+              <li><strong>"Weak" match</strong>: the reverse — the organization name is found inside the VAMC's search term. This direction is more prone to false positives with short/generic terms.</li>
+            </ul>
+          </li>
+          <li>Station 101 (the generic VHA/VA Central Office umbrella entry) is intentionally excluded from local facility attribution because it would match an unreasonably large share of records.</li>
+          <li>A publication can match zero, one, or multiple facilities. Matches are evidence for manual review, not authoritative assignments.</li>
+        </ol>
+      </section>
+
+      <section id="ord-methodology" class="section-card">
+        <h2>8. ORD Portfolio Tagging Methodology <a class="anchor-link" href="#ord-methodology">#</a></h2>
+        <h3>Background: VA ORD portfolio structure (verified against research.va.gov)</h3>
+        <p>ORD renamed its four legacy research "services" into four "Broad Portfolios," keeping the underlying VA grant award number prefixes unchanged:</p>
+        <dl class="row">
+          <dt class="col-sm-5">Brain, Behavioral and Mental Health</dt><dd class="col-sm-7">Clinical Science R&amp;D (CSR&amp;D) — also houses the Cooperative Studies Program (CSP)</dd>
+          <dt class="col-sm-5">Health Systems Research</dt><dd class="col-sm-7">Health Services R&amp;D (HSR&amp;D) — also houses QUERI</dd>
+          <dt class="col-sm-5">Medical Health</dt><dd class="col-sm-7">Biomedical Laboratory R&amp;D (BLR&amp;D)</dd>
+          <dt class="col-sm-5">Rehabilitation Research, Development, and Translation</dt><dd class="col-sm-7">Rehabilitation R&amp;D (RR&amp;D)</dd>
+        </dl>
+        <p>ORD separately manages six cross-cutting <strong>Actively Managed Portfolios</strong>, which span multiple Broad Portfolios and are topic/exposure-based rather than funding-service-based: Gulf War Illness, Military Exposures, Pain/Opioid Use (POU), Precision Oncology, Suicide Prevention, Traumatic Brain Injury.</p>
+
+        <h3>How tagging works (<code class="inline">processors/ord_portfolio.py</code>)</h3>
+        <p><strong>Broad Portfolio (higher confidence):</strong></p>
+        <ul>
+          <li>Regex search of the Funding, Acknowledgements, and Authors Affiliations columns for VA grant award number prefixes: CX (Clinical Science R&amp;D), BX (Biomedical Laboratory R&amp;D), RX (Rehabilitation R&amp;D), HX (Health Services R&amp;D).</li>
+          <li>Regex search of the same columns for explicit service names (e.g., "Clinical Science Research and Development," "HSR&amp;D," "Cooperative Studies Program," "QUERI").</li>
+          <li>A record can match zero, one, or several of these — multiple grants or explicit mentions in the same acknowledgement section are common.</li>
+        </ul>
+        <p><strong>Actively Managed Portfolio (lower confidence):</strong></p>
+        <ul>
+          <li>Regex/keyword search of Title, Abstract, and MeSH terms for topic signals associated with each of the six portfolios (e.g., "traumatic brain injury," "suicide prevention," "opioid use disorder," "gulf war illness," "burn pit," "precision oncology").</li>
+          <li>This is a topic match, not a funding match — a paper can be tagged here purely because of its subject matter, with no VA funding tie at all.</li>
+        </ul>
+
+        <h3>Why coverage is low and that is expected</h3>
+        <p>Verified 2026-09-15 against the 17,000-record FY26 filtered export:</p>
+        <ul>
+          <li>14.4% (2,443) have Broad Portfolio evidence.</li>
+          <li>7.8% (1,334) match an Actively Managed Portfolio keyword.</li>
+          <li>79.7% have no detectable ORD signal at all.</li>
+        </ul>
+        <p>This is expected, not a bug: most records in the Dimensions VA subset reflect publications with a VA-affiliated co-author, not VA-funded research. Only the subset that explicitly cites a VA grant or an ORD service name in its funding/acknowledgement text can be tagged.</p>
+
+        <h3>What this is NOT</h3>
+        <p>This is a text-pattern estimate, not an official VA source of truth. It is not sourced from PubTracker, iPortal, or any authoritative VA grants system. Treat tagged results as a starting point for manual verification, not as a final funding-attribution record.</p>
+      </section>
+
+      <section id="limitations" class="section-card">
+        <h2>9. Known Limitations and Disclaimers <a class="anchor-link" href="#limitations">#</a></h2>
+        <div class="disclaimer-card">
+          <ul class="mb-0">
+            <li><strong>Third-party data source:</strong> All publication data originates from Dimensions, a commercial bibliometric database, not from an internal VA system. Coverage, indexing lag, and metadata quality are controlled by Dimensions, not by this project.</li>
+            <li><strong>Point-in-time snapshot:</strong> The dashboard reflects Dimensions' data as of the last export date, not real time. Citation counts, RCR, and FCR will change as Dimensions re-indexes.</li>
+            <li><strong>SOP exclusions by default:</strong> Conference abstracts and correction/errata records are excluded from default views per SOP; a sidebar/toggle control can restore them for review.</li>
+            <li><strong>Facility attribution is evidence, not assignment:</strong> Name-based substring matching can produce both false positives (a short/generic VAMC search term coincidentally matching an unrelated organization) and false negatives (an organization name phrased differently than expected).</li>
+            <li><strong>ORD portfolio tags are estimates:</strong> Broad Portfolio tags are higher confidence (grant-prefix and explicit service-name evidence) but still text-derived, not verified against an authoritative funding system. Actively Managed Portfolio tags are lower confidence (topic keywords only) and do not imply VA funding.</li>
+            <li><strong>No date-window filtering inside Dimensions' own UI is trusted by the compliance tool</strong> (a related but separate tool in this repository) — users of that tool are responsible for pre-filtering Dimensions to the correct quarter before export, per its own SOP document.</li>
+            <li><strong>Multi-tag / multi-facility publications:</strong> A single publication can carry more than one ORD tag and/or match more than one facility. Any chart or metric that counts "publications per category" will not sum to the total publication count when this happens — this is called out in the relevant dashboard sections.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="troubleshooting" class="section-card">
+        <h2>10. Troubleshooting <a class="anchor-link" href="#troubleshooting">#</a></h2>
+        <dl>
+          <dt>Streamlit dashboard shows "The merged Dimensions file is missing"</dt>
+          <dd>Check that <code class="inline">DATA_PATH</code> in <code class="inline">dashboard.py</code> points to a CSV file that actually exists (<code class="inline">run_dimensions_export.bat</code> or the batch merge step must have been run first).</dd>
+
+          <dt>Static dashboard shows "Could not load dashboard data"</dt>
+          <dd>The page failed to fetch <code class="inline">docs/data/publications.json</code> or <code class="inline">facility_matches.json</code>. Confirm both files exist under <code class="inline">docs/data/</code> and that the page is being served over http/https (<code class="inline">fetch()</code> will not work from a <code class="inline">file://</code> URL in most browsers) — use a local server such as <code class="inline">python -m http.server</code> for local testing, or rely on GitHub Pages.</dd>
+
+          <dt>Static dashboard JSON build fails with invalid JSON / NaN</dt>
+          <dd><code class="inline">build_static_dashboard_data.py</code> explicitly disables <code class="inline">allow_nan</code> when writing JSON so any stray NaN raises immediately during generation rather than producing invalid JSON silently. If this happens, check for pandas columns holding float NaN instead of None — the fix pattern already in place is to cast the DataFrame to object dtype before substituting None for missing values.</dd>
+
+          <dt>ORD tagging coverage looks unexpectedly low or high</dt>
+          <dd>Re-run <code class="inline">tag_ord_portfolios.py</code> directly and inspect the printed per-portfolio breakdown. Coverage in the 10-20% range for Broad Portfolio evidence is consistent with prior validated runs (see Section 8); a large deviation may indicate the source CSV changed format or the funding/acknowledgement columns are empty/missing.</dd>
+
+          <dt>Charts look broken or fail to resize (static dashboard only)</dt>
+          <dd>Ensure every <code class="inline">&lt;canvas&gt;</code> is wrapped in a fixed-height <code class="inline">.chart-wrap</code> div and that its Chart.js options include <code class="inline">maintainAspectRatio: false</code> and a <code class="inline">resizeDelay</code> — omitting either was the root cause of an earlier resize-loop stability issue.</dd>
+        </dl>
+      </section>
+
+      <section id="changelog" class="section-card">
+        <h2>11. Change Log <a class="anchor-link" href="#changelog">#</a></h2>
+        <dl>
+          <dt>2026-09-14</dt>
+          <dd>Initial Dimensions batch export automation (<code class="inline">dimensions_batch_export.py</code>) validated end to end: 48 year batches, 4,061 source rows, 0 duplicates. Streamlit dashboard.py built (Overview, Records, Facilities, Research impact tabs) against the resulting <code class="inline">dimensions_merged.csv</code>.</dd>
+
+          <dt>2026-09-15 (AM)</dt>
+          <dd>Verified ORD's "Broad Portfolio" naming and 6 "Actively Managed Portfolios" against research.va.gov. Built <code class="inline">processors/ord_portfolio.py</code> and <code class="inline">tag_ord_portfolios.py</code>. Verified VA-scoped export scaled to 27,283 publications (2025+2026) across 92 batches with exact reconciliation. Wired ORD tagging into <code class="inline">processors/dashboard_data.py</code> automatically. Added an "ORD Portfolios" tab and related sidebar filters to <code class="inline">dashboard.py</code>; switched its data source to the FY26 filtered export (17,000 records).</dd>
+
+          <dt>2026-09-15 (PM)</dt>
+          <dd>Built the static/GitHub-Pages dashboard (<code class="inline">docs/dashboard.html</code>, <code class="inline">docs/dashboard.js</code>, <code class="inline">build_static_dashboard_data.py</code>) with feature parity to the Streamlit version, publishing via the existing GitHub Actions Pages workflow. Fixed the "Top facilities" chart (paginated horizontal bars) and an underlying Chart.js resize-instability issue across all charts. Added the disclaimer banner and per-tab/per-metric explainer panels, including a "Publications by ORD portfolio" combined chart on the Overview tab. Published this documentation page and linked it from the dashboard footer.</dd>
+        </dl>
+      </section>
+
+      <footer class="page-footer text-center">
+        Last updated: 2026-09-15 &middot; <a href="./dashboard.html">Back to Dashboard</a> &middot; <a href="./index.html">Compliance Report Tool</a>
+      </footer>
+
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
