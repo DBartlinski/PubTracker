@@ -29,7 +29,9 @@
     #loadingMsg { font-size: .9rem; }
     .nav-pills .nav-link.active { background-color: #236b56; }
     .nav-pills .nav-link { color: #236b56; }
-    canvas { max-height: 320px; }
+    .chart-wrap { position: relative; height: 320px; }
+    .chart-wrap.chart-wrap-tall { height: 420px; }
+    canvas { display: block; }
     .caption-note { color: #6c757d; font-size: .82rem; }
   </style>
 </head>
@@ -95,12 +97,24 @@
     <div id="tab-overview" class="tab-pane">
       <div class="row g-3 mb-3" id="overviewMetrics"></div>
       <div class="row g-3">
-        <div class="col-md-7"><div class="section-card"><h6>VA fiscal-year trend</h6><canvas id="chartFyTrend"></canvas></div></div>
-        <div class="col-md-5"><div class="section-card"><h6>Document types</h6><canvas id="chartDocTypes"></canvas></div></div>
+        <div class="col-md-7"><div class="section-card"><h6>VA fiscal-year trend</h6><div class="chart-wrap"><canvas id="chartFyTrend"></canvas></div></div></div>
+        <div class="col-md-5"><div class="section-card"><h6>Document types</h6><div class="chart-wrap"><canvas id="chartDocTypes"></canvas></div></div></div>
       </div>
       <div class="row g-3">
-        <div class="col-md-6"><div class="section-card"><h6>Top facilities</h6><canvas id="chartTopFacilities"></canvas></div></div>
-        <div class="col-md-6"><div class="section-card"><h6>Fiscal-period coverage</h6><canvas id="chartFyCoverage"></canvas></div></div>
+        <div class="col-md-8">
+          <div class="section-card">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Top facilities</h6>
+              <div class="d-flex align-items-center gap-2">
+                <span class="caption-note" id="facilitiesChartPageInfo"></span>
+                <button id="facilitiesChartPrev" class="btn btn-sm btn-outline-secondary">Prev 10</button>
+                <button id="facilitiesChartNext" class="btn btn-sm btn-outline-secondary">Next 10</button>
+              </div>
+            </div>
+            <div class="chart-wrap chart-wrap-tall"><canvas id="chartTopFacilities"></canvas></div>
+          </div>
+        </div>
+        <div class="col-md-4"><div class="section-card"><h6>Fiscal-period coverage</h6><div class="chart-wrap"><canvas id="chartFyCoverage"></canvas></div></div></div>
       </div>
     </div>
 
@@ -153,8 +167,8 @@
       </div>
       <div class="row g-3 mb-3" id="ordMetrics"></div>
       <div class="row g-3">
-        <div class="col-md-6"><div class="section-card"><h6>Broad Portfolio (VA funding service)</h6><canvas id="chartOrdBroad"></canvas></div></div>
-        <div class="col-md-6"><div class="section-card"><h6>Actively Managed Portfolio (topic)</h6><canvas id="chartOrdAmp"></canvas></div></div>
+        <div class="col-md-6"><div class="section-card"><h6>Broad Portfolio (VA funding service)</h6><div class="chart-wrap"><canvas id="chartOrdBroad"></canvas></div></div></div>
+        <div class="col-md-6"><div class="section-card"><h6>Actively Managed Portfolio (topic)</h6><div class="chart-wrap"><canvas id="chartOrdAmp"></canvas></div></div></div>
       </div>
       <div class="section-card">
         <h6>Broad Portfolio by facility</h6>
@@ -170,8 +184,8 @@
     <div id="tab-impact" class="tab-pane d-none">
       <div class="row g-3 mb-3" id="impactMetrics"></div>
       <div class="row g-3">
-        <div class="col-md-6"><div class="section-card"><h6>Top journals</h6><canvas id="chartJournals"></canvas></div></div>
-        <div class="col-md-6"><div class="section-card"><h6>Citation distribution</h6><canvas id="chartCitations"></canvas></div></div>
+        <div class="col-md-6"><div class="section-card"><h6>Top journals</h6><div class="chart-wrap"><canvas id="chartJournals"></canvas></div></div></div>
+        <div class="col-md-6"><div class="section-card"><h6>Citation distribution</h6><div class="chart-wrap"><canvas id="chartCitations"></canvas></div></div></div>
       </div>
     </div>
   </div>

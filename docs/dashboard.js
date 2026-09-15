@@ -9,6 +9,8 @@ let filtered = [];       // publications after current filters
 let filteredMatches = []; // matches restricted to filtered publications
 let recordsPage = 0;
 const RECORDS_PAGE_SIZE = 50;
+let facilitiesChartPage = 0;
+const FACILITIES_CHART_PAGE_SIZE = 10;
 const charts = {};
 
 const BROAD_PORTFOLIO_ORDER = [
@@ -83,8 +85,30 @@ function barChart(canvasId, labels, data, color = '#236b56') {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: color }] },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 100,
+      animation: false,
       plugins: { legend: { display: false } },
       scales: { x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } } },
+    },
+  });
+}
+
+function horizontalBarChart(canvasId, labels, data, color = '#236b56') {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  charts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: color }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 100,
+      animation: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { y: { ticks: { autoSkip: false } } },
     },
   });
 }
@@ -194,13 +218,29 @@ function renderOverview() {
   const topDocTypes = Object.entries(docTypeCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
   barChart('chartDocTypes', topDocTypes.map(e => e[0]), topDocTypes.map(e => e[1]), '#b4553d');
 
-  const facilityCounts = {};
-  filteredMatches.forEach(m => { facilityCounts[m.facility] = (facilityCounts[m.facility] || 0) + 1; });
-  const topFacilities = Object.entries(facilityCounts).sort((a, b) => b[1] - a[1]).slice(0, 12);
-  barChart('chartTopFacilities', topFacilities.map(e => e[0]), topFacilities.map(e => e[1]), '#ca8a2c');
+  facilitiesChartPage = 0;
+  renderTopFacilitiesChart();
 
   const assigned = filtered.filter(p => p.fiscalPeriod && p.fiscalPeriod !== 'Unavailable').length;
   barChart('chartFyCoverage', ['Assigned', 'Unavailable'], [assigned, total - assigned], '#5f6b85');
+}
+
+function renderTopFacilitiesChart() {
+  const facilityCounts = {};
+  filteredMatches.forEach(m => { facilityCounts[m.facility] = (facilityCounts[m.facility] || 0) + 1; });
+  const sorted = Object.entries(facilityCounts).sort((a, b) => b[1] - a[1]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / FACILITIES_CHART_PAGE_SIZE));
+  facilitiesChartPage = Math.min(facilitiesChartPage, totalPages - 1);
+  const start = facilitiesChartPage * FACILITIES_CHART_PAGE_SIZE;
+  const page = sorted.slice(start, start + FACILITIES_CHART_PAGE_SIZE);
+
+  horizontalBarChart('chartTopFacilities', page.map(e => e[0]), page.map(e => e[1]), '#ca8a2c');
+
+  document.getElementById('facilitiesChartPageInfo').textContent = sorted.length
+    ? `Facilities ${start + 1}–${Math.min(start + FACILITIES_CHART_PAGE_SIZE, sorted.length)} of ${sorted.length}`
+    : 'No facility matches under the current filters';
+  document.getElementById('facilitiesChartPrev').disabled = facilitiesChartPage === 0;
+  document.getElementById('facilitiesChartNext').disabled = facilitiesChartPage >= totalPages - 1;
 }
 
 // ============================================================
@@ -389,6 +429,12 @@ async function init() {
     document.getElementById('recordsNext').addEventListener('click', () => {
       const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PAGE_SIZE));
       if (recordsPage < totalPages - 1) { recordsPage++; renderRecords(); }
+    });
+    document.getElementById('facilitiesChartPrev').addEventListener('click', () => {
+      if (facilitiesChartPage > 0) { facilitiesChartPage--; renderTopFacilitiesChart(); }
+    });
+    document.getElementById('facilitiesChartNext').addEventListener('click', () => {
+      facilitiesChartPage++; renderTopFacilitiesChart();
     });
 
     applyFilters();
