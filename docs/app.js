@@ -10,7 +10,9 @@ const EXCLUDED_DOC_TYPES = new Set(['conference abstract', 'correction erratum']
 // ============================================================
 let vamcRef          = [];   // rows from vamc_reference.csv
 let ptRaw            = null; // { text, result } after PT upload
-let dimRawText       = null; // raw CSV text after Dimensions upload
+let dimRawTexts      = [];   // array of raw CSV texts (one per uploaded file)
+let dimPubList       = [];   // merged, deduplicated pub list from all Dimensions files
+let dimDateInfo      = {};   // date range info from merged Dimensions data
 let availableQuarters = [];  // [{fy, q, label}] detected from PubTracker
 let selectedQuarters  = [];  // [{fy, q, label}] chosen by user
 let resultRows        = [];  // final compliance table rows
@@ -262,9 +264,39 @@ function parseDimensions(csvText, startDate = null, endDate = null) {
   };
 }
 
-// ============================================================
-// 7. VAMC MATCHING & COMPLIANCE CALCULATION
-// ============================================================
+/**
+ * Parse and merge multiple Dimensions CSV texts into a single deduplicated pub list.
+ * Deduplicates by Publication ID across all files.
+ */
+function parseDimensionsMulti(csvTexts) {
+  const seenIds  = new Set();
+  const merged   = [];
+  let totalCount = 0;
+  const allDates = [];
+
+  csvTexts.forEach(csvText => {
+    const { pubList, dateInfo } = parseDimensions(csvText);
+    totalCount += dateInfo.totalCount;
+    if (dateInfo.minDate) allDates.push(dateInfo.minDate);
+    if (dateInfo.maxDate) allDates.push(dateInfo.maxDate);
+    pubList.forEach(pub => {
+      if (!seenIds.has(pub.pubId)) {
+        seenIds.add(pub.pubId);
+        merged.push(pub);
+      }
+    });
+  });
+
+  const minDate = allDates.length ? new Date(Math.min(...allDates)) : null;
+  const maxDate = allDates.length ? new Date(Math.max(...allDates)) : null;
+
+  return {
+    pubList: merged,
+    dateInfo: { totalCount, uniqueCount: merged.size, minDate, maxDate },
+  };
+}
+
+
 
 /** Parse a station-number string that may contain comma/semicolon-separated codes. */
 function parseStationNumbers(stationStr, altStr) {
@@ -560,7 +592,7 @@ function hideStatus() {
 
 function checkReadyToGenerate() {
   document.getElementById('generateBtn').disabled =
-    !(ptRaw && dimRawText && availableQuarters.length);
+    !(ptRaw && dimRawTexts.length && availableQuarters.length);
 }
 
 function renderQuarterSelector(quarters) {
@@ -640,15 +672,14 @@ function runGenerate() {
         if (ptResult.counts[key]) ptCounts[key] = ptResult.counts[key];
       });
 
-      // Derive Dimensions date range from selected quarters
-      const ranges   = selectedQuarters.map(({ fy, q }) => getQuarterDateRange(fy, q));
-      const dimStart = new Date(Math.min(...ranges.map(r => r.start)));
-      const dimEnd   = new Date(Math.max(...ranges.map(r => r.end)));
-
-      const { pubList, dateInfo } = parseDimensions(dimRawText, dimStart, dimEnd);
+      // Parse Dimensions without date filtering — per SOP the user uploads
+      // the appropriate Dimensions file; all records in the file are counted.
+      const { pubList, dateInfo } = parseDimensionsMulti(dimRawTexts);
+      dimPubList  = pubList;
+      dimDateInfo = dateInfo;
 
       // Calculate
-      resultRows = calculateCompliance(ptCounts, pubList, selectedQuarters);
+      resultRows = calculateCompliance(ptCounts, dimPubList, selectedQuarters);
 
       // Render
       renderMetrics(resultRows, selectedQuarters);
@@ -656,12 +687,22 @@ function runGenerate() {
 
       // Dimensions info banner
       const dimInfoEl = document.getElementById('dimDateInfo');
-      let dimMsg = `Dimensions: <strong>${dateInfo.filteredCount}</strong> of <strong>${dateInfo.totalCount}</strong> records used after date filtering`;
-      if (dateInfo.minDate && dateInfo.maxDate) {
-        dimMsg += ` · file date range: ${dateInfo.minDate.toLocaleDateString()} – ${dateInfo.maxDate.toLocaleDateString()}`;
+      let dimMsg = `Dimensions: <strong>${dimPubList.length}</strong> unique publications loaded`;
+      if (dimDateInfo.totalCount !== dimPubList.length) {
+        dimMsg += ` (${dimDateInfo.totalCount} total across all files, deduplicated)`;
+      }
+      if (dimDateInfo.minDate && dimDateInfo.maxDate) {
+        dimMsg += ` · date range: ${dimDateInfo.minDate.toLocaleDateString()} – ${dimDateInfo.maxDate.toLocaleDateString()}`;
       }
       dimInfoEl.innerHTML = dimMsg;
       dimInfoEl.classList.remove('d-none');
+
+      // Per-quarter download buttons
+      const qDlEl = document.getElementById('quarterDownloads');
+      qDlEl.innerHTML = selectedQuarters.map(q => `
+        <button class="btn btn-sm btn-outline-success me-1" onclick="downloadQuarter('${q.label}')">
+          ⬇ ${escHtml(q.label)} CSV
+        </button>`).join('');
 
       document.getElementById('resultsSection').classList.remove('d-none');
       document.getElementById('downloadButtons').classList.remove('d-none');
@@ -726,14 +767,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // ── Dimensions upload ──────────────────────────────────────────────────
+  // ── Dimensions upload (multiple files) ───────────────────────────────
   document.getElementById('dimFile').addEventListener('change', async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    dimRawText = await file.text();
-    document.getElementById('dimStatus').innerHTML =
-      `<span class="text-success fw-semibold">✓ ${escHtml(file.name)}</span> — ready`;
-    checkReadyToGenerate();
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    dimRawTexts = await Promise.all(files.map(f => f.text()));
+
+    try {
+      const { pubList, dateInfo } = parseDimensionsMulti(dimRawTexts);
+      dimPubList  = pubList;
+      dimDateInfo = dateInfo;
+
+      let msg = `<span class="text-success fw-semibold">✓ ${files.length} file${files.length > 1 ? 's' : ''} loaded</span>`;
+      msg += ` — <strong>${pubList.length}</strong> unique publications`;
+      if (files.length > 1) msg += ` (merged &amp; deduplicated from ${dateInfo.totalCount} total records)`;
+      if (dateInfo.minDate && dateInfo.maxDate) {
+        msg += ` · date range: ${dateInfo.minDate.toLocaleDateString()} – ${dateInfo.maxDate.toLocaleDateString()}`;
+      }
+      document.getElementById('dimStatus').innerHTML = msg;
+      checkReadyToGenerate();
+    } catch (err) {
+      document.getElementById('dimStatus').innerHTML =
+        `<span class="text-danger">⚠ ${escHtml(err.message)}</span>`;
+    }
   });
 
   // ── Generate ───────────────────────────────────────────────────────────
@@ -754,3 +811,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       `compliance_report_${stem}.txt`);
   });
 });
+
+// Per-quarter CSV download (called from inline onclick)
+function downloadQuarter(label) {
+  if (!resultRows.length) return;
+  const q = selectedQuarters.find(q => q.label === label);
+  if (!q) return;
+  const stem = label.replace(' ', '');
+  downloadText(generateCSV(resultRows, [q]),
+    `pubtracker_compliance_${stem}.csv`, 'text/csv;charset=utf-8;');
+}
