@@ -149,6 +149,7 @@
           <dt class="col-sm-3">Mapped to a VAMC</dt><dd class="col-sm-9">Publications with at least one name-based facility match (see Facilities tab). A match is evidence for review, not a confirmed assignment.</dd>
           <dt class="col-sm-3">Unmatched</dt><dd class="col-sm-9">Publications with no facility match — either the org name didn't resemble any VAMC in our reference list, or the record isn't tied to a specific local facility.</dd>
           <dt class="col-sm-3">Open access</dt><dd class="col-sm-9">Share of publications Dimensions marks as freely available (Gold, Green, Hybrid, or Bronze), as opposed to paywalled ("Closed").</dd>
+          <dt class="col-sm-3">Combined unique (Dimensions + PubTracker)</dt><dd class="col-sm-9">Deduplicated count of publications found in Dimensions (current filters) or in the PubTracker submission export (matched by normalized title), or both. The "+N from PubTracker only" delta shows how many were submitted to PubTracker but not found in this Dimensions export — PubTracker is a partial, user-submitted dataset, so this is a rough combined-volume estimate, not an authoritative total.</dd>
         </dl>
       </details>
       <div class="row g-3">
@@ -255,6 +256,23 @@
         </p>
       </div>
       <div class="row g-3 mb-3" id="ordMetrics"></div>
+
+      <div class="section-card">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="fltPubtrackerCrossref">
+          <label class="form-check-label" for="fltPubtrackerCrossref">
+            Cross-reference against PubTracker submissions (experimental, off by default)
+          </label>
+        </div>
+        <p class="caption-note mt-1 mb-0">
+          Adds a corroboration check for the subset of publications also manually submitted to PubTracker.
+          PubTracker only covers user-submitted records and is not comprehensive, so turning this on never
+          changes the ORD numbers above — it only adds an extra section below. Leave it off to keep the
+          Dimensions-only view (the default, unaffected by this feature).
+        </p>
+        <div id="pubtrackerCrossrefResults" class="mt-2 d-none"></div>
+      </div>
+
       <details class="metric-explainer" open>
         <summary>How to read these five numbers</summary>
         <dl class="mt-2 mb-0 row">

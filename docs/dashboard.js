@@ -12,6 +12,7 @@ const RECORDS_PAGE_SIZE = 50;
 let facilitiesChartPage = 0;
 const FACILITIES_CHART_PAGE_SIZE = 10;
 const charts = {};
+let pubtrackerLookup = null; // Map<normTitle, {reportedPortfolio, vaFunded}>, lazy-loaded on first use
 
 const BROAD_PORTFOLIO_ORDER = [
   'Brain, Behavioral and Mental Health',
@@ -66,12 +67,25 @@ function fmtPct(n, total) {
   return total ? `${Math.round((100 * n) / total)}%` : '0%';
 }
 
-function metricCard(label, value, delta) {
-  return `<div class="col-md-3"><div class="metric-card">
+function metricCard(label, value, delta, id) {
+  return `<div class="col-md-3"><div class="metric-card"${id ? ` id="${id}"` : ''}>
     <div class="label">${label}</div>
     <div class="value">${value}</div>
     ${delta ? `<div class="delta">${delta}</div>` : ''}
   </div></div>`;
+}
+
+function normalizeTitle(title) {
+  if (typeof title !== 'string') return '';
+  return title.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+async function loadPubtrackerLookup() {
+  if (pubtrackerLookup) return pubtrackerLookup;
+  const resp = await fetch('./data/pubtracker_crossref.json');
+  const rows = resp.ok ? await resp.json() : [];
+  pubtrackerLookup = new Map(rows.map(r => [r.normTitle, r]));
+  return pubtrackerLookup;
 }
 
 function destroyChart(id) {
@@ -206,7 +220,9 @@ function renderOverview() {
     metricCard('Mapped to a VAMC', matchedCount.toLocaleString()),
     metricCard('Unmatched', (total - matchedCount).toLocaleString()),
     metricCard('Open access', `${openAccessRate.toFixed(0)}%`),
+    metricCard('Combined unique (Dimensions + PubTracker)', '\u2026', 'Loading\u2026', 'metricCombinedUnique'),
   ].join('');
+  updateCombinedUniqueMetric();
 
   const fyCounts = {};
   filtered.forEach(p => { if (p.fiscalYear) fyCounts[p.fiscalYear] = (fyCounts[p.fiscalYear] || 0) + 1; });
@@ -224,6 +240,25 @@ function renderOverview() {
 
   const assigned = filtered.filter(p => p.fiscalPeriod && p.fiscalPeriod !== 'Unavailable').length;
   barChart('chartFyCoverage', ['Assigned', 'Unavailable'], [assigned, total - assigned], '#71767a');
+}
+
+async function updateCombinedUniqueMetric() {
+  const lookup = await loadPubtrackerLookup();
+  const el = document.getElementById('metricCombinedUnique');
+  if (!el) return; // filters/tab changed before this resolved; a newer render already replaced the card
+  const valueEl = el.querySelector('.value');
+  const deltaEl = el.querySelector('.delta');
+  if (lookup.size === 0) {
+    valueEl.textContent = filtered.length.toLocaleString();
+    deltaEl.textContent = 'PubTracker data unavailable';
+    return;
+  }
+  const dimTitles = new Set(filtered.map(p => normalizeTitle(p.title)).filter(Boolean));
+  const ptTitles = new Set(lookup.keys());
+  const combinedTitles = new Set([...dimTitles, ...ptTitles]);
+  const ptOnlyCount = combinedTitles.size - dimTitles.size;
+  valueEl.textContent = combinedTitles.size.toLocaleString();
+  deltaEl.textContent = `+${ptOnlyCount.toLocaleString()} from PubTracker only`;
 }
 
 function renderOverviewPortfolioChart() {
@@ -337,6 +372,62 @@ function renderFacilities() {
 // ============================================================
 // ORD PORTFOLIOS
 // ============================================================
+async function updatePubtrackerCrossref() {
+  const checkbox = document.getElementById('fltPubtrackerCrossref');
+  const container = document.getElementById('pubtrackerCrossrefResults');
+  if (!checkbox.checked) {
+    container.classList.add('d-none');
+    container.innerHTML = '';
+    return;
+  }
+  container.classList.remove('d-none');
+  container.innerHTML = '<p class="caption-note mb-0">Loading PubTracker submissions…</p>';
+
+  const lookup = await loadPubtrackerLookup();
+  if (lookup.size === 0) {
+    container.innerHTML = '<p class="caption-note mb-0">No PubTracker export data is available for this build.</p>';
+    return;
+  }
+
+  const matched = filtered
+    .map(p => ({ pub: p, pt: lookup.get(normalizeTitle(p.title)) }))
+    .filter(row => row.pt);
+  if (matched.length === 0) {
+    container.innerHTML = '<p class="caption-note mb-0">No filtered publications matched a PubTracker submission by title.</p>';
+    return;
+  }
+
+  const agree = matched.filter(row => Boolean(row.pub.hasOrdEvidence) === Boolean(row.pt.vaFunded)).length;
+  const disagreeRows = matched.filter(row => Boolean(row.pub.hasOrdEvidence) !== Boolean(row.pt.vaFunded));
+
+  const tableRows = disagreeRows.slice(0, 200).map(row => `<tr>
+    <td>${escapeHtml(row.pub.id)}</td>
+    <td>${escapeHtml(row.pub.title)}</td>
+    <td>${row.pub.hasOrdEvidence ? 'Yes' : 'No'}</td>
+    <td>${escapeHtml((row.pub.ordBroad || []).join('; '))}</td>
+    <td>${escapeHtml(row.pt.reportedPortfolio || '')}</td>
+    <td>${row.pt.vaFunded ? 'Yes' : 'No'}</td>
+  </tr>`).join('');
+
+  container.innerHTML = `
+    <p class="caption-note">
+      ${matched.length.toLocaleString()} of ${filtered.length.toLocaleString()} filtered publications were also found in the PubTracker
+      submission export (matched by normalized title). This is a partial, user-submitted dataset — absence from
+      PubTracker does NOT mean a publication isn't ORD-funded, it may simply not have been submitted. Use this
+      only to spot-check agreement, not as a replacement for the Broad Portfolio funding-evidence numbers above.
+    </p>
+    <div class="row g-3 mb-2">
+      ${metricCard('Matched to PubTracker', matched.length.toLocaleString())}
+      ${metricCard('Funding evidence agrees', agree.toLocaleString())}
+      ${metricCard('Funding evidence disagrees', disagreeRows.length.toLocaleString())}
+    </div>
+    ${disagreeRows.length ? `<div class="tbl-wrap"><table class="table table-sm table-striped">
+      <thead><tr><th>Publication ID</th><th>Title</th><th>Has ORD Funding Evidence</th><th>ORD Broad Portfolios</th><th>PubTracker Reported Portfolio</th><th>PubTracker VA Funded</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table></div>` : ''}
+  `;
+}
+
 function renderOrdPortfolios() {
   const total = filtered.length;
   const withBroad = filtered.filter(p => p.hasOrdEvidence).length;
@@ -351,6 +442,8 @@ function renderOrdPortfolios() {
     metricCard('With Actively Managed tag', withAmp.toLocaleString(), fmtPct(withAmp, total)),
     metricCard(NO_SIGNAL_LABEL, withNeither.toLocaleString(), fmtPct(withNeither, total)),
   ].join('');
+
+  updatePubtrackerCrossref();
 
   const broadCounts = {};
   filtered.forEach(p => (p.ordBroad || []).forEach(name => { broadCounts[name] = (broadCounts[name] || 0) + 1; }));
@@ -443,6 +536,7 @@ async function init() {
     document.getElementById('fltIncludeAll').addEventListener('change', applyFilters);
     document.getElementById('fltSearch').addEventListener('input', debounce(applyFilters, 250));
     document.getElementById('fltReset').addEventListener('click', resetFilters);
+    document.getElementById('fltPubtrackerCrossref').addEventListener('change', updatePubtrackerCrossref);
     document.getElementById('btnDownloadCsv').addEventListener('click', downloadFilteredCsv);
     document.getElementById('recordsPrev').addEventListener('click', () => { if (recordsPage > 0) { recordsPage--; renderRecords(); } });
     document.getElementById('recordsNext').addEventListener('click', () => {

@@ -16,6 +16,7 @@ project_root = Path.cwd()
 sys.path.insert(0, str(project_root))
 
 from processors.dashboard_data import load_dashboard_dataset, split_values
+from processors.pubtracker_crossref import load_pubtracker_submissions
 
 SOURCE_CSV = project_root / "output/dimensions_va_2025_2026/dimensions_va_2025_2026_filtered_2025-10-01_to_2026-09-30.csv"
 OUTPUT_DIR = project_root / "docs/data"
@@ -104,6 +105,20 @@ def main() -> None:
 
     print(f"Wrote {pub_path} ({pub_path.stat().st_size / 1_048_576:.2f} MB)")
     print(f"Wrote {match_path} ({match_path.stat().st_size / 1_048_576:.2f} MB)")
+
+    pubtracker = load_pubtracker_submissions()
+    crossref_path = OUTPUT_DIR / "pubtracker_crossref.json"
+    if pubtracker.empty:
+        crossref_path.write_text("[]", encoding="utf-8")
+        print("No PubTracker export found in 'PubTracker Export/' - wrote empty pubtracker_crossref.json")
+    else:
+        crossref_records = pubtracker.rename(columns={
+            "_norm_title": "normTitle",
+            "PubTracker Reported Portfolio": "reportedPortfolio",
+            "PubTracker VA Funded": "vaFunded",
+        }).to_dict(orient="records")
+        crossref_path.write_text(json.dumps(crossref_records, separators=(",", ":")), encoding="utf-8")
+        print(f"Wrote {crossref_path} ({crossref_path.stat().st_size / 1_048_576:.2f} MB, {len(crossref_records):,} submissions)")
 
 
 if __name__ == "__main__":
