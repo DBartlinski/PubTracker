@@ -26,6 +26,14 @@ output/dimensions_va_2025_2026/
 *.xlsx
 ~$*.docx
 ~$*.xlsx
+*.db
+PubTracker Export/*.pdf
+PubTracker Export/*.png
+
+# Local run artifacts
+out.txt
+test_output.log
+validation_report.txt
 
 # Test / debug scripts
 test_validation.py
