@@ -18,6 +18,9 @@ ENV/
 
 # Streamlit
 .streamlit/
+.dimensions-browser-profile/
+output/dimensions_batches/
+output/dimensions_va_2025_2026/
 
 # Data files – keep sample CSVs in data/ but exclude raw uploads
 *.xlsx

@@ -1,0 +1,550 @@
+================================================================================
+VA PUBLICATIONS DASHBOARD & ORD PORTFOLIO TAGGING
+Project Documentation
+Last updated: 2026-09-15
+================================================================================
+
+TABLE OF CONTENTS
+  1. Purpose and Scope
+  2. Development History (How This Was Built, Start to Finish)
+  3. System Architecture and Data Pipeline
+  4. File and Component Reference
+  5. How to Refresh the Data (Step by Step)
+  6. How to Read and Interpret the Dashboard
+  7. Facility Attribution Methodology
+  8. ORD Portfolio Tagging Methodology
+  9. Known Limitations and Disclaimers
+  10. Troubleshooting
+  11. Change Log
+
+--------------------------------------------------------------------------------
+1. PURPOSE AND SCOPE
+--------------------------------------------------------------------------------
+
+What this project is:
+  A reporting layer built on top of the existing PubTracker-Dev compliance
+  toolkit. It answers a different question than the compliance report does:
+
+    - The COMPLIANCE REPORT (app.py / docs/index.html) answers: "Did the
+      VAMC/investigator submit this publication to PubTracker as required?"
+      It compares PubTracker submissions against Dimensions publications,
+      per VAMC, per fiscal quarter.
+
+    - The PUBLICATIONS DASHBOARD (dashboard.py / docs/dashboard.html) answers:
+      "What does VA-affiliated research output actually look like?" It is an
+      exploration tool over the full Dimensions export: records, facilities,
+      citations, and (new) an estimate of which VA Office of Research and
+      Development (ORD) portfolio each publication is associated with.
+
+  Two implementations exist and are kept in sync:
+    - A Streamlit app (dashboard.py) for internal/local use with Python
+      installed.
+    - A static, client-side web app (docs/dashboard.html + docs/dashboard.js)
+      published to GitHub Pages, so it can be shared with anyone via a URL
+      with no local setup. All processing happens in the visitor's browser;
+      no data is uploaded to a server.
+
+Why the ORD portfolio piece was added:
+  Leadership wanted to know which VA ORD research portfolio (e.g., Health
+  Systems Research, Rehabilitation R&D, Suicide Prevention) each publication
+  falls under. Dimensions does not carry an ORD field, and PubTracker only
+  has this information for the subset of publications VA staff manually
+  submitted. To get broader coverage, an automated text-based estimator was
+  built (see Section 8) that infers ORD portfolio from VA grant award
+  numbers and topic keywords already present in the Dimensions export.
+
+Who this is for:
+  VA research office staff and leadership who need a directional view of
+  research output, facility attribution, and portfolio mix. It is explicitly
+  NOT a system of record — see Section 9, Disclaimers.
+
+--------------------------------------------------------------------------------
+2. DEVELOPMENT HISTORY (HOW THIS WAS BUILT, START TO FINISH)
+--------------------------------------------------------------------------------
+
+This section documents the actual build sequence so future maintainers
+understand why things are structured the way they are.
+
+Step 1 - Data acquisition (pre-existing, reused as-is)
+  dimensions_batch_export.py automates a Playwright browser session against
+  va.dimensions.ai to export every publication under the Veterans Health
+  Administration research-organization filter. Dimensions caps every export
+  job at 500 records and truncates silently past that, so the exporter must
+  partition the full result set into disjoint batches (by publication_type,
+  document_type, open_access_status, and research_org peeling) that are each
+  <=500 records, submit them one at a time, download the resulting CSVs, and
+  merge + deduplicate by Publication ID. A verified 2026-09-15 run produced
+  27,283 VA-scoped publications (2025+2026) across 92 batches with zero
+  duplicates after merge, then a fiscal-year window filter was applied to
+  produce the "filtered_2025-10-01_to_2026-09-30.csv" file (17,000 records)
+  that the dashboard currently reads.
+
+Step 2 - Dashboard data preparation (processors/dashboard_data.py)
+  Built to take the raw Dimensions export and turn it into an analysis-ready
+  table:
+    - Parses/repairs the Dimensions CSV export format (metadata header rows,
+      BOM handling) via processors/dimensions_processor.py.
+    - Derives a single "Canonical Date" per publication by trying print date,
+      then online date, then a general date field, and records which
+      precision (day/month/year-only) was achieved.
+    - Converts canonical dates into VA fiscal year/quarter labels, reusing
+      the fiscal-quarter logic originally written for the compliance tool.
+    - Flags SOP-eligible records (conference abstracts and corrections are
+      excluded from official reporting by policy, but are still viewable if
+      a toggle is switched on).
+    - Cross-references "Research Organizations - standardized" against
+      data/vamc_reference.csv to build a facility-match evidence table (see
+      Section 7).
+
+Step 3 - ORD portfolio tagging (processors/ord_portfolio.py)
+  Added after research confirmed (via research.va.gov) that ORD's four
+  legacy "services" were renamed to four "Broad Portfolios" with unchanged
+  underlying grant-award-number prefixes, and that ORD separately runs six
+  cross-cutting "Actively Managed Portfolios." A regex-based tagger was
+  built to scan each publication's funding/acknowledgement/affiliation text
+  for grant prefixes and service names (Broad Portfolio, higher confidence)
+  and each publication's title/abstract/MeSH terms for topic keywords
+  (Actively Managed Portfolio, lower confidence). This was wired directly
+  into the dashboard data pipeline so every dashboard load is automatically
+  tagged with no separate step required.
+  A standalone script, tag_ord_portfolios.py, exists to run the tagger in
+  isolation and print a coverage summary (useful for QA / leadership
+  reporting without opening the dashboard).
+
+Step 4 - Streamlit dashboard (dashboard.py)
+  A five-tab Streamlit app was built on top of the prepared data: Overview,
+  Records, Facilities, ORD Portfolios, and Research Impact. Filters
+  (fiscal year, facility, ORD Broad/Actively Managed Portfolio, document
+  type, open access, journal, research area, country, free-text search) are
+  shared across all tabs via a sidebar. A filtered-CSV download is provided
+  on the Records tab.
+
+Step 5 - Static (GitHub Pages) dashboard (docs/dashboard.html + docs/dashboard.js)
+  To make the dashboard shareable without requiring Python or local setup,
+  a client-side JavaScript re-implementation was built with feature parity
+  to the Streamlit version:
+    - build_static_dashboard_data.py runs the same Python data pipeline and
+      exports two slim JSON files (docs/data/publications.json and
+      docs/data/facility_matches.json) containing only the fields the page
+      needs to render (no abstracts/funding text, to keep the payload small
+      -- roughly 21 MB combined for 17,000 records / ~16,000 facility
+      matches).
+    - docs/dashboard.html/js is vanilla JavaScript + Chart.js (loaded from a
+      CDN), with no build step and no server-side component. All filtering,
+      aggregation, and charting happens in the browser after the two JSON
+      files are fetched once on page load.
+    - The existing GitHub Actions workflow (.github/workflows/pages.yml)
+      already deploys the entire docs/ folder to GitHub Pages on every push
+      to main, so no new deployment infrastructure was needed.
+
+Step 6 - Usability fixes and iteration
+  - The "Top facilities" chart was originally a vertical bar chart with 100+
+    overlapping labels; it was changed to a paginated (10-at-a-time)
+    horizontal bar chart with Prev/Next controls.
+  - A latent Chart.js resize-loop issue (canvases without a fixed-height
+    wrapper and without maintainAspectRatio:false) was fixed across all
+    charts on the static page for stability.
+  - Disclaimer banners and per-metric "explainer" panels (see Section 6)
+    were added after review, so the dashboard proactively answers likely
+    questions about data provenance and how each number was calculated,
+    rather than requiring a follow-up conversation.
+
+--------------------------------------------------------------------------------
+3. SYSTEM ARCHITECTURE AND DATA PIPELINE
+--------------------------------------------------------------------------------
+
+  [Dimensions.ai website]
+         |  (dimensions_batch_export.py - Playwright automation)
+         v
+  output/dimensions_va_2025_2026/*.csv  (raw batch exports, merged + deduped)
+         |
+         v
+  dimensions_va_2025_2026_filtered_2025-10-01_to_2026-09-30.csv
+  (fiscal-year-window subset; this is the file both dashboards read)
+         |
+         |  processors/dimensions_processor.py::read_dimensions_df()
+         |  (strips Dimensions metadata header, handles BOM)
+         v
+  processors/dashboard_data.py::load_dashboard_dataset()
+         |  - prepare_publications(): canonical dates, fiscal periods,
+         |    SOP-eligibility flag, open-access flag, DOI/PubMed/Dimensions
+         |    links
+         |  - build_facility_matches(): name-match evidence vs. VAMC
+         |    reference list
+         |  - add_facility_summary(): rolls matches up per publication
+         |  - tag_publications() [processors/ord_portfolio.py]: ORD Broad
+         |    Portfolio + Actively Managed Portfolio tags
+         v
+  DashboardDataset (publications DataFrame + facility_matches DataFrame)
+         |
+         +---------------------------+
+         |                           |
+         v                           v
+  dashboard.py                build_static_dashboard_data.py
+  (Streamlit, local use)      (exports docs/data/*.json)
+                                     |
+                                     v
+                              docs/dashboard.html + dashboard.js
+                              (GitHub Pages, browser-side rendering)
+
+--------------------------------------------------------------------------------
+4. FILE AND COMPONENT REFERENCE
+--------------------------------------------------------------------------------
+
+Data acquisition
+  dimensions_batch_export.py   Playwright automation that exports the full
+                                VA-scoped Dimensions publication set.
+  run_dimensions_export.bat    One-click launcher for the above.
+  DIMENSIONS_EXPORT.md         Operating instructions for the exporter.
+
+Data processing (shared library, importable by both dashboards)
+  processors/dimensions_processor.py   Reads/repairs raw Dimensions CSV.
+  processors/dashboard_data.py         Builds the analysis-ready dataset:
+                                        dates, fiscal periods, SOP flags,
+                                        facility matches.
+  processors/ord_portfolio.py          ORD Broad/Actively Managed Portfolio
+                                        tagging (regex-based).
+  processors/compliance_calculator.py  Shared fiscal-quarter and facility
+                                        name-matching helpers (originally
+                                        built for the compliance tool,
+                                        reused here).
+  data/vamc_reference.csv              Master list of ~140 VAMCs, station
+                                        numbers, and search terms used for
+                                        facility matching.
+
+Streamlit dashboard
+  dashboard.py                 Five-tab Streamlit app (Overview, Records,
+                                Facilities, ORD Portfolios, Research impact).
+  run_dashboard.bat             One-click launcher.
+  test_dashboard_data.py        Unit tests plus an optional reconciliation
+                                 check against a known real dataset.
+
+Static (GitHub Pages) dashboard
+  build_static_dashboard_data.py   Generates docs/data/publications.json
+                                    and docs/data/facility_matches.json.
+  docs/dashboard.html               Markup, styles, and all explainer text
+                                     for the static dashboard.
+  docs/dashboard.js                 All client-side logic: filtering,
+                                     aggregation, chart rendering, CSV export.
+  docs/data/publications.json        Generated data (not hand-edited).
+  docs/data/facility_matches.json    Generated data (not hand-edited).
+  docs/data/meta.json                Generation metadata (source file name,
+                                      record counts).
+  .github/workflows/pages.yml        Existing CI job that deploys docs/ to
+                                      GitHub Pages on every push to main.
+
+Standalone / QA scripts
+  tag_ord_portfolios.py         Runs ORD tagging in isolation and prints a
+                                 coverage report (useful without opening a
+                                 dashboard).
+  validate_dimensions_csv.py    Ad hoc validation of a Dimensions export
+                                 (date range, duplicate IDs, null checks).
+
+--------------------------------------------------------------------------------
+5. HOW TO REFRESH THE DATA (STEP BY STEP)
+--------------------------------------------------------------------------------
+
+Full refresh (new Dimensions export):
+  1. Run run_dimensions_export.bat. A visible Chromium window opens; log in
+     to Dimensions when prompted. The tool partitions, submits, downloads,
+     validates, and merges automatically. This can take a while for large
+     result sets (dozens of export jobs).
+  2. Confirm the output under output/dimensions_va_2025_2026/ (or
+     output/dimensions_batches/ for the original run) looks correct --
+     check the printed record counts match Dimensions' own totals.
+  3. If a fiscal-year window filter is needed, produce (or update) the
+     "..._filtered_<start>_to_<end>.csv" file referenced by both
+     dashboards (see DATA_PATH constants below).
+  4. Update DATA_PATH in dashboard.py and SOURCE_CSV in
+     build_static_dashboard_data.py and tag_ord_portfolios.py if the
+     filename changed.
+
+Refresh the Streamlit dashboard:
+  - Nothing else to do. dashboard.py reads the CSV directly and re-runs the
+    full pipeline (including ORD tagging) on every load, cached by file
+    modification time.
+
+Refresh the static (GitHub Pages) dashboard:
+  1. Run: python build_static_dashboard_data.py
+     This regenerates docs/data/publications.json and
+     docs/data/facility_matches.json from the current source CSV.
+  2. Commit and push docs/data/*.json (and any docs/dashboard.html/js
+     changes) to the main branch.
+  3. The existing GitHub Actions workflow deploys automatically -- no
+     manual deployment step. Check the "Actions" tab on GitHub to confirm
+     the "Deploy to GitHub Pages" run succeeded.
+
+Re-run ORD tagging only (no dashboard changes):
+  - python tag_ord_portfolios.py
+    Prints a coverage summary (percent of records with Broad Portfolio
+    evidence, percent with an Actively Managed tag, per-portfolio counts)
+    and writes a tagged CSV alongside the source file for manual review.
+
+--------------------------------------------------------------------------------
+6. HOW TO READ AND INTERPRET THE DASHBOARD
+--------------------------------------------------------------------------------
+
+The dashboard itself now contains inline explainers for every metric and
+chart (an amber "About this data" banner at the top, and collapsible "What
+do these numbers mean?" panels under each metrics row). This section is a
+condensed reference of the same guidance for offline reading.
+
+Overview tab
+  Publications          Count of records passing the current filters.
+  Mapped to a VAMC       Records with >=1 name-based facility match. Evidence
+                         for review, not a confirmed assignment.
+  Unmatched              Records with no facility match.
+  Open access             Share of records Dimensions marks as freely
+                         available (Gold/Green/Hybrid/Bronze vs. Closed).
+  VA fiscal-year trend    Publication count per VA fiscal year, based on the
+                         canonical publication date.
+  Document types          Top 10 Dimensions document types.
+  Publications by ORD portfolio   Combined view of Broad Portfolio and
+                         Actively Managed Portfolio counts, color-coded.
+                         Bars do not sum to the publication count because a
+                         record can carry more than one tag, or none.
+  Top facilities          Publications matched per VAMC, paginated 10 at a
+                         time, highest first.
+  Fiscal-period coverage   Whether a usable fiscal quarter could be derived
+                         (records with only a publication year cannot be
+                         placed reliably relative to the October fiscal-year
+                         boundary and are marked "Unavailable").
+
+Records tab
+  One row per filtered publication, with links out to DOI/PubMed/Dimensions.
+  The CSV download exports exactly the filtered rows shown, including ORD
+  tags, for use outside the dashboard.
+
+Facilities tab
+  Publications  Unique publications matched to that facility (a publication
+                can match more than one facility).
+  Strong        The facility's search term was found inside the
+                publication's organization name -- the more reliable
+                match direction.
+  Weak          The reverse: the organization name was found inside the
+                facility's search term. Less reliable; short/generic
+                facility names can produce false positives.
+
+ORD Portfolios tab (the most important section to read carefully)
+  Publications                      Total filtered records (the denominator
+                                     for the three figures below).
+  With Broad Portfolio evidence      Records where a VA grant award prefix
+                                     (CX, BX, RX, HX) or an explicit VA
+                                     research-service name was found in the
+                                     funding/acknowledgement text.
+                                     HIGHER CONFIDENCE: treat as "likely
+                                     VA-funded via this service," not a
+                                     certainty.
+  With Actively Managed tag          Records where title/abstract/MeSH terms
+                                     matched keywords for one of the six
+                                     Actively Managed Portfolios.
+                                     LOWER CONFIDENCE: reflects subject
+                                     matter only, not confirmed VA funding.
+  No ORD signal detected             Records with neither tag. EXPECTED TO
+                                     BE THE MAJORITY, because most records
+                                     in this dataset simply have a
+                                     VA-affiliated author and are not
+                                     VA-funded research. A high number here
+                                     is normal, not a data-quality problem.
+  Important: the three "with" categories overlap (a record can have both,
+  one, or neither) and will not sum to the total. Use Broad Portfolio
+  numbers for a defensible funding-service estimate; use Actively Managed
+  numbers only as a directional topic-volume signal.
+
+Research Impact tab
+  All values are computed by Dimensions, not locally, and reflect
+  Dimensions' data as of the export date, not real time.
+  Median citations   Middle value of "Times cited"; median (not mean) is
+                     used because a few highly-cited papers would otherwise
+                     skew an average.
+  Mean RCR / Mean FCR   Field- and year-normalized citation scores; 1.0 =
+                     average performance for that field, above/below 1.0 =
+                     above/below average. "N/A" means no filtered records
+                     have a value.
+  Unique journals    Distinct journal/source titles among filtered records.
+  Citation counts and RCR/FCR naturally grow with publication age -- use
+  for context, not to rank research quality, and especially do not compare
+  very recent publications against older ones on this basis.
+
+--------------------------------------------------------------------------------
+7. FACILITY ATTRIBUTION METHODOLOGY
+--------------------------------------------------------------------------------
+
+Facility matching reuses the same approach as the compliance tool:
+  1. Each VAMC in data/vamc_reference.csv has one or more "search terms"
+     derived from its display name (parenthetical location/AKA notes are
+     stripped; multi-name VAMCs separated by ";" produce multiple terms).
+  2. Each publication's "Research Organizations - standardized" field
+     (semicolon-separated) is compared against every VAMC's search terms
+     using case-insensitive substring matching in both directions:
+       - "Strong" match: the VAMC's search term is found inside the
+         publication's organization name (e.g., "Ann Arbor" found inside
+         "University of Michigan Ann Arbor VA Medical Center").
+       - "Weak" match: the reverse -- the organization name is found inside
+         the VAMC's search term. This direction is more prone to false
+         positives with short/generic terms.
+  3. Station 101 (the generic VHA/VA Central Office umbrella entry) is
+     intentionally excluded from local facility attribution because it
+     would match an unreasonably large share of records.
+  4. A publication can match zero, one, or multiple facilities. Matches are
+     evidence for manual review, not authoritative assignments.
+
+--------------------------------------------------------------------------------
+8. ORD PORTFOLIO TAGGING METHODOLOGY
+--------------------------------------------------------------------------------
+
+Background: VA ORD portfolio structure (verified against research.va.gov)
+  ORD renamed its four legacy research "services" into four "Broad
+  Portfolios," keeping the underlying VA grant award number prefixes
+  unchanged:
+    Brain, Behavioral and Mental Health   = Clinical Science R&D (CSR&D)
+                                             (also houses the Cooperative
+                                             Studies Program, CSP)
+    Health Systems Research               = Health Services R&D (HSR&D)
+                                             (also houses QUERI)
+    Medical Health                        = Biomedical Laboratory R&D (BLR&D)
+    Rehabilitation Research, Development, = Rehabilitation R&D (RR&D)
+      and Translation
+  ORD separately manages six cross-cutting "Actively Managed Portfolios,"
+  which span multiple Broad Portfolios and are topic/exposure-based rather
+  than funding-service-based:
+    Gulf War Illness, Military Exposures, Pain/Opioid Use (POU),
+    Precision Oncology, Suicide Prevention, Traumatic Brain Injury.
+
+How tagging works (processors/ord_portfolio.py)
+  Broad Portfolio (higher confidence):
+    - Regex search of the Funding, Acknowledgements, and Authors
+      Affiliations columns for VA grant award number prefixes: CX (Clinical
+      Science R&D), BX (Biomedical Laboratory R&D), RX (Rehabilitation
+      R&D), HX (Health Services R&D).
+    - Regex search of the same columns for explicit service names (e.g.,
+      "Clinical Science Research and Development," "HSR&D," "Cooperative
+      Studies Program," "QUERI").
+    - A record can match zero, one, or several of these -- multiple grants
+      or explicit mentions in the same acknowledgement section are common.
+  Actively Managed Portfolio (lower confidence):
+    - Regex/keyword search of Title, Abstract, and MeSH terms for topic
+      signals associated with each of the six portfolios (e.g., "traumatic
+      brain injury," "suicide prevention," "opioid use disorder," "gulf war
+      illness," "burn pit," "precision oncology").
+    - This is a topic match, not a funding match -- a paper can be tagged
+      here purely because of its subject matter, with no VA funding tie at
+      all.
+
+Why coverage is low and that is expected
+  Verified 2026-09-15 against the 17,000-record FY26 filtered export:
+    - 14.4% (2,443) have Broad Portfolio evidence.
+    - 7.8% (1,334) match an Actively Managed Portfolio keyword.
+    - 79.7% have no detectable ORD signal at all.
+  This is expected, not a bug: most records in the Dimensions VA subset
+  reflect publications with a VA-affiliated co-author, not VA-funded
+  research. Only the subset that explicitly cites a VA grant or an ORD
+  service name in its funding/acknowledgement text can be tagged.
+
+What this is NOT
+  This is a text-pattern estimate, not an official VA source of truth. It
+  is not sourced from PubTracker, iPortal, or any authoritative VA grants
+  system. Treat tagged results as a starting point for manual verification,
+  not as a final funding-attribution record.
+
+--------------------------------------------------------------------------------
+9. KNOWN LIMITATIONS AND DISCLAIMERS
+--------------------------------------------------------------------------------
+
+  - Third-party data source: All publication data originates from
+    Dimensions, a commercial bibliometric database, not from an internal VA
+    system. Coverage, indexing lag, and metadata quality are controlled by
+    Dimensions, not by this project.
+  - Point-in-time snapshot: The dashboard reflects Dimensions' data as of
+    the last export date, not real time. Citation counts, RCR, and FCR will
+    change as Dimensions re-indexes.
+  - SOP exclusions by default: Conference abstracts and correction/errata
+    records are excluded from default views per SOP; a sidebar/toggle
+    control can restore them for review.
+  - Facility attribution is evidence, not assignment: Name-based substring
+    matching can produce both false positives (a short/generic VAMC search
+    term coincidentally matching an unrelated organization) and false
+    negatives (an organization name phrased differently than expected).
+  - ORD portfolio tags are estimates: See Section 8. Broad Portfolio tags
+    are higher confidence (grant-prefix and explicit service-name evidence)
+    but still text-derived, not verified against an authoritative funding
+    system. Actively Managed Portfolio tags are lower confidence (topic
+    keywords only) and do not imply VA funding.
+  - No date-window filtering inside Dimensions' own UI is trusted by the
+    compliance tool (a related but separate tool in this repository) --
+    users of that tool are responsible for pre-filtering Dimensions to the
+    correct quarter before export, per its own SOP document.
+  - Multi-tag / multi-facility publications: A single publication can carry
+    more than one ORD tag and/or match more than one facility. Any chart or
+    metric that counts "publications per category" will not sum to the
+    total publication count when this happens -- this is called out in the
+    relevant dashboard sections.
+
+--------------------------------------------------------------------------------
+10. TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+Streamlit dashboard shows "The merged Dimensions file is missing"
+  Check that DATA_PATH in dashboard.py points to a CSV file that actually
+  exists (run_dimensions_export.bat or the batch merge step must have been
+  run first).
+
+Static dashboard shows "Could not load dashboard data"
+  The page failed to fetch docs/data/publications.json or
+  facility_matches.json. Confirm both files exist under docs/data/ and that
+  the page is being served over http/https (fetch() will not work from a
+  file:// URL in most browsers) -- use a local server such as
+  `python -m http.server` for local testing, or rely on GitHub Pages.
+
+Static dashboard JSON build fails with invalid JSON / NaN
+  build_static_dashboard_data.py explicitly disables allow_nan when writing
+  JSON so any stray NaN raises immediately during generation rather than
+  producing invalid JSON silently. If this happens, check for pandas
+  columns holding float NaN instead of None -- the fix pattern already in
+  place is to cast the DataFrame to object dtype before substituting None
+  for missing values.
+
+ORD tagging coverage looks unexpectedly low or high
+  Re-run tag_ord_portfolios.py directly and inspect the printed per-portfolio
+  breakdown. Coverage in the 10-20% range for Broad Portfolio evidence is
+  consistent with prior validated runs (see Section 8); a large deviation
+  may indicate the source CSV changed format or the funding/acknowledgement
+  columns are empty/missing.
+
+Charts look broken or fail to resize (static dashboard only)
+  Ensure every <canvas> is wrapped in a fixed-height ".chart-wrap" div and
+  that its Chart.js options include maintainAspectRatio: false and a
+  resizeDelay -- omitting either was the root cause of an earlier
+  resize-loop stability issue.
+
+--------------------------------------------------------------------------------
+11. CHANGE LOG
+--------------------------------------------------------------------------------
+
+2026-09-14   Initial Dimensions batch export automation (dimensions_batch_export.py)
+             validated end to end: 48 year batches, 4,061 source rows, 0 duplicates.
+             Streamlit dashboard.py built (Overview, Records, Facilities, Research
+             impact tabs) against the resulting dimensions_merged.csv.
+
+2026-09-15   Verified ORD's "Broad Portfolio" naming and 6 "Actively Managed
+             Portfolios" against research.va.gov. Built processors/ord_portfolio.py
+             and tag_ord_portfolios.py. Verified VA-scoped export scaled to 27,283
+             publications (2025+2026) across 92 batches with exact reconciliation.
+             Wired ORD tagging into processors/dashboard_data.py automatically.
+             Added an "ORD Portfolios" tab and related sidebar filters to
+             dashboard.py; switched its data source to the FY26 filtered export
+             (17,000 records).
+
+2026-09-15   Built the static/GitHub-Pages dashboard (docs/dashboard.html,
+             docs/dashboard.js, build_static_dashboard_data.py) with feature
+             parity to the Streamlit version, publishing via the existing
+             GitHub Actions Pages workflow. Fixed the "Top facilities" chart
+             (paginated horizontal bars) and an underlying Chart.js
+             resize-instability issue across all charts. Added the disclaimer
+             banner and per-tab/per-metric explainer panels described in
+             Section 6, including a new "Publications by ORD portfolio"
+             combined chart on the Overview tab.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

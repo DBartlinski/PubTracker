@@ -76,9 +76,16 @@
 
 <div class="container-fluid px-4">
 
-  <!-- ── Step 1: Upload ──────────────────────────────────────────────────── -->
-  <div class="section-label mb-2">Step 1 — Upload data files</div>
-  <div class="row g-3 mb-3">
+  <!-- ── Auto-loaded notice ──────────────────────────────────────────────── -->
+  <div class="alert alert-success small mb-3">
+    ✓ This report is auto-loaded from the latest generated dataset (see banner below once loaded).
+    No upload is required — use "Use my own files instead" below only for ad-hoc/custom files.
+  </div>
+
+  <!-- ── Step 1: Upload (optional override) ─────────────────────────────── -->
+  <details class="mb-3">
+    <summary class="section-label" style="cursor:pointer">Use my own files instead (optional override)</summary>
+  <div class="row g-3 mb-3 mt-2">
     <div class="col-md-6">
       <div class="upload-card h-100">
         <div class="fw-semibold mb-1">PubTracker CSV</div>
@@ -119,8 +126,9 @@
   <div id="statusMsg" class="alert d-none mb-3" role="alert"></div>
 
   <button id="generateBtn" class="btn btn-primary px-4 mb-4" disabled>
-    Generate Compliance Report
+    Generate Compliance Report (from uploaded files)
   </button>
+  </details>
 
   <!-- ── Results ────────────────────────────────────────────────────────── -->
   <div id="resultsSection" class="d-none">

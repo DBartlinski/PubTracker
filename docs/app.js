@@ -648,6 +648,74 @@ function renderMetrics(rows, quarters) {
 // ============================================================
 // 12. MAIN GENERATE HANDLER
 // ============================================================
+
+/** Flatten a precomputed docs/data/compliance.json payload into the row/quarters shape the renderer expects. */
+function rowsFromCompliancePayload(payload) {
+  const quarters = payload.quarters.map(label => ({ label }));
+  const rows = payload.vamcs.map(v => {
+    const row = { vamc: v.vamc, stationNo: v.stationNo, vaFunded: v.vaFunded };
+    quarters.forEach(({ label }) => {
+      const q = v.perQuarter[label] || { pt: 0, dim: 0, pct: '' };
+      row[`${label}_pt`] = q.pt;
+      row[`${label}_dim`] = q.dim;
+      row[`${label}_pct`] = q.pct;
+      row[`${label}_notInDim`] = v.notInDim;
+    });
+    return row;
+  });
+
+  const totalRow = { vamc: 'TOTAL', stationNo: '', vaFunded: '' };
+  quarters.forEach(({ label }) => {
+    const t = payload.total[label] || { pt: 0, dim: 0, pct: '' };
+    totalRow[`${label}_pt`] = t.pt;
+    totalRow[`${label}_dim`] = t.dim;
+    totalRow[`${label}_pct`] = t.pct;
+    totalRow[`${label}_notInDim`] = false;
+  });
+  rows.push(totalRow);
+
+  return { rows, quarters };
+}
+
+/** Auto-load the precomputed compliance payload (aggregated, no manual upload needed). */
+async function loadAutoCompliance() {
+  let payload;
+  try {
+    const resp = await fetch('./data/compliance.json');
+    if (!resp.ok) return false;
+    payload = await resp.json();
+  } catch (e) {
+    return false;
+  }
+  if (!payload || !payload.vamcs || !payload.vamcs.length) return false;
+
+  const { rows, quarters } = rowsFromCompliancePayload(payload);
+  resultRows = rows;
+  selectedQuarters = quarters;
+
+  renderMetrics(resultRows, selectedQuarters);
+  renderTable(resultRows, selectedQuarters);
+
+  const genFrom = payload.generatedFrom || {};
+  const cr = payload.crossrefSummary || { matched: 0, corroborated: 0 };
+  const crPct = cr.matched ? Math.round(cr.corroborated / cr.matched * 100) : 0;
+  document.getElementById('dimDateInfo').innerHTML =
+    `Auto-loaded from <strong>${escHtml(genFrom.dimensions || 'Dimensions dataset')}</strong> and ` +
+    `<strong>${escHtml(genFrom.pubtracker || 'PubTracker export')}</strong>. ` +
+    `PubTracker corroboration: <strong>${cr.corroborated}/${cr.matched}</strong> (${crPct}%) of matched ` +
+    `Dimensions publications also found by title in PubTracker.`;
+  document.getElementById('dimDateInfo').classList.remove('d-none');
+
+  document.getElementById('quarterDownloads').innerHTML = selectedQuarters.map(q => `
+    <button class="btn btn-sm btn-outline-success me-1" onclick="downloadQuarter('${q.label}')">
+      ⬇ ${escHtml(q.label)} CSV
+    </button>`).join('');
+
+  document.getElementById('resultsSection').classList.remove('d-none');
+  document.getElementById('downloadButtons').classList.remove('d-none');
+  return true;
+}
+
 function runGenerate() {
   selectedQuarters = getSelectedQuarters();
   if (!selectedQuarters.length) {
@@ -737,6 +805,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setStatus(`Failed to load VAMC reference data: ${e.message}. If running locally, use run_web.bat instead of opening the HTML file directly.`, 'danger');
     return;
   }
+
+  // Try the precomputed dataset first so the report shows up with no upload required.
+  await loadAutoCompliance();
 
   // ── PubTracker upload ──────────────────────────────────────────────────
   document.getElementById('ptFile').addEventListener('change', async e => {

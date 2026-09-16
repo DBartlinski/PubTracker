@@ -11,6 +11,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 from processors.pubtracker_processor import process_pubtracker, get_quarter_label
 from processors.dimensions_processor import read_dimensions_df, process_dimensions
 from processors.compliance_calculator import calculate_compliance, load_vamc_reference
+from processors.pubtracker_crossref import find_latest_export, load_pubtracker_submissions, _normalize_title
+
+# Default auto-loaded sources (matches the dataset used by dashboard.py / the static site)
+DEFAULT_DIMENSIONS_PATH = os.path.join(
+    os.path.dirname(__file__), 'output', 'dimensions_va_2025_2026',
+    'dimensions_va_2025_2026_filtered_2025-10-01_to_2026-09-30.csv',
+)
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -28,14 +35,13 @@ with st.sidebar:
     st.header('How to use')
     st.markdown(
         """
-        **Step 1 – PubTracker export**  
-        Download the PubTracker CSV (all publications for the current year).
-        Save as CSV and upload below.
+        **Auto-loaded by default**  
+        The app automatically uses the latest PubTracker export in
+        `PubTracker Export/` and the FY26 Dimensions dataset already
+        generated for the dashboard. Use the checkboxes below to upload a
+        custom file instead for either source.
 
-        **Step 2 – Dimensions export**  
-        Download the Dimensions XLSX, open in Excel and save as CSV. Upload below.
-
-        **Step 3 – Generate**  
+        **Generate**  
         Click *Generate Compliance Report*. The app will:
         - Filter PubTracker to publications only
         - Exclude Conference Abstracts & Correction Erratum from Dimensions
@@ -60,30 +66,46 @@ st.title('📊 PubTracker Compliance Report Generator')
 # ---------------------------------------------------------------------------
 col_left, col_right = st.columns(2)
 
+auto_pt_path = find_latest_export()
+
 with col_left:
     st.subheader('PubTracker Data')
-    pubtracker_file = st.file_uploader(
-        'Upload PubTracker CSV export',
-        type=['csv'],
-        key='pubtracker_upload',
-        help='Export from PubTracker – all submission types for the year.',
-    )
-    if pubtracker_file:
-        st.success(f'✓  {pubtracker_file.name}')
+    use_custom_pt = st.checkbox('Upload a custom PubTracker CSV instead', key='use_custom_pt')
+    pubtracker_file = None
+    if use_custom_pt:
+        pubtracker_file = st.file_uploader(
+            'Upload PubTracker CSV export',
+            type=['csv'],
+            key='pubtracker_upload',
+            help='Export from PubTracker – all submission types for the year.',
+        )
+        if pubtracker_file:
+            st.success(f'✓  {pubtracker_file.name}')
+    elif auto_pt_path:
+        st.success(f'✓  Auto-loaded: {auto_pt_path.name}')
+    else:
+        st.warning('No PubTracker Export/*.xlsx found. Upload a custom CSV instead.')
 
 with col_right:
     st.subheader('Dimensions Data')
-    dimensions_file = st.file_uploader(
-        'Upload Dimensions CSV export',
-        type=['csv'],
-        key='dimensions_upload',
-        help=(
-            'Export from VA Dimensions. The standard Dimensions export has two '
-            'metadata rows above the column headers – the app handles this automatically.'
-        ),
-    )
-    if dimensions_file:
-        st.success(f'✓  {dimensions_file.name}')
+    use_custom_dim = st.checkbox('Upload a custom Dimensions CSV instead', key='use_custom_dim')
+    dimensions_file = None
+    if use_custom_dim:
+        dimensions_file = st.file_uploader(
+            'Upload Dimensions CSV export',
+            type=['csv'],
+            key='dimensions_upload',
+            help=(
+                'Export from VA Dimensions. The standard Dimensions export has two '
+                'metadata rows above the column headers – the app handles this automatically.'
+            ),
+        )
+        if dimensions_file:
+            st.success(f'✓  {dimensions_file.name}')
+    elif os.path.exists(DEFAULT_DIMENSIONS_PATH):
+        st.success(f'✓  Auto-loaded: {os.path.basename(DEFAULT_DIMENSIONS_PATH)}')
+    else:
+        st.warning('Default Dimensions dataset not found. Upload a custom CSV instead.')
 
 # ---------------------------------------------------------------------------
 # Generate button
@@ -98,8 +120,11 @@ with st.expander('⚙️  Options'):
         help='The SOP specifies publications only. Enable this if your PubTracker extract was not pre-filtered.',
     )
 
-if not pubtracker_file or not dimensions_file:
-    st.info('Upload both files above to enable the report generator.')
+have_pt = bool(pubtracker_file) if use_custom_pt else bool(auto_pt_path)
+have_dim = bool(dimensions_file) if use_custom_dim else os.path.exists(DEFAULT_DIMENSIONS_PATH)
+
+if not have_pt or not have_dim:
+    st.info('Provide both a PubTracker source and a Dimensions source above to enable the report generator.')
     st.stop()
 
 if st.button('Generate Compliance Report', type='primary', width='stretch'):
@@ -110,7 +135,10 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
 
         # ── PubTracker ──────────────────────────────────────────────────────
         try:
-            pt_raw = pd.read_csv(pubtracker_file)
+            if use_custom_pt:
+                pt_raw = pd.read_csv(pubtracker_file)
+            else:
+                pt_raw = pd.read_excel(auto_pt_path, sheet_name=0)
             pt_counts, pt_info = process_pubtracker(pt_raw, include_presentations=include_presentations)
         except Exception as exc:
             errors.append(f'PubTracker processing error: {exc}')
@@ -119,8 +147,11 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
 
         # ── Dimensions ──────────────────────────────────────────────────────
         try:
-            dimensions_file.seek(0)
-            dim_raw = read_dimensions_df(dimensions_file.read())
+            if use_custom_dim:
+                dimensions_file.seek(0)
+                dim_raw = read_dimensions_df(dimensions_file.read())
+            else:
+                dim_raw = pd.read_csv(DEFAULT_DIMENSIONS_PATH)
             dim_pub_list, dim_date_info = process_dimensions(dim_raw)
         except Exception as exc:
             errors.append(f'Dimensions processing error: {exc}')
@@ -185,6 +216,24 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
         metric_cols[base].metric(f'{label}\nPubTracker', t[f'{label} PubTracker Count'])
         metric_cols[base + 1].metric(f'{label}\nDimensions', t[f'{label} Dimensions Count'])
         metric_cols[base + 2].metric(f'{label}\n% Entered', t[f'{label} % Entered'])
+
+    # ── PubTracker corroboration (title match against PubTracker Export) ─────
+    pt_submissions = load_pubtracker_submissions()
+    if not pt_submissions.empty and 'Publication ID' in dim_raw.columns and 'Title' in dim_raw.columns:
+        pub_title_map = dict(zip(dim_raw['Publication ID'].astype(str), dim_raw['Title']))
+        norm_titles = set(pt_submissions['_norm_title'])
+        matched_ids = set()
+        if all_quarters:
+            for info in diagnostics.get(all_quarters[0], {}).values():
+                matched_ids.update(info['matched_pub_ids'])
+        matched_titles = [pub_title_map.get(pid) for pid in matched_ids if pub_title_map.get(pid)]
+        corroborated = sum(1 for t in matched_titles if _normalize_title(t) in norm_titles)
+        total_matched = len(matched_titles)
+        pct = round(corroborated / total_matched * 100) if total_matched else 0
+        st.caption(
+            f"🔗  PubTracker corroboration: **{corroborated}/{total_matched}** ({pct}%) of the Dimensions "
+            "publications matched to a VAMC also appear (by title) in the latest PubTracker export."
+        )
 
     # ── Results table ────────────────────────────────────────────────────────
     st.subheader('Compliance Table')
