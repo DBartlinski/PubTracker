@@ -220,7 +220,7 @@ function renderOverview() {
     metricCard('Mapped to a VAMC', matchedCount.toLocaleString()),
     metricCard('Unmatched', (total - matchedCount).toLocaleString()),
     metricCard('Open access', `${openAccessRate.toFixed(0)}%`),
-    metricCard('Combined unique (Dimensions + PubTracker)', '\u2026', 'Loading\u2026', 'metricCombinedUnique'),
+    metricCard('Total ORD-funded (Dimensions + PubTracker)', '\u2026', 'Loading\u2026', 'metricCombinedUnique'),
   ].join('');
   updateCombinedUniqueMetric();
 
@@ -249,16 +249,20 @@ async function updateCombinedUniqueMetric() {
   const valueEl = el.querySelector('.value');
   const deltaEl = el.querySelector('.delta');
   if (lookup.size === 0) {
-    valueEl.textContent = filtered.length.toLocaleString();
+    valueEl.textContent = filtered.filter(p => p.hasOrdEvidence).length.toLocaleString();
     deltaEl.textContent = 'PubTracker data unavailable';
     return;
   }
-  const dimTitles = new Set(filtered.map(p => normalizeTitle(p.title)).filter(Boolean));
+  // Only Dimensions records with confirmed ORD funding evidence count from the Dimensions side;
+  // every PubTracker submission counts as-is (deduplicated by normalized title against that set).
+  const dimFundedTitles = new Set(
+    filtered.filter(p => p.hasOrdEvidence).map(p => normalizeTitle(p.title)).filter(Boolean)
+  );
   const ptTitles = new Set(lookup.keys());
-  const combinedTitles = new Set([...dimTitles, ...ptTitles]);
-  const ptOnlyCount = combinedTitles.size - dimTitles.size;
+  const combinedTitles = new Set([...dimFundedTitles, ...ptTitles]);
+  const ptOnlyCount = combinedTitles.size - dimFundedTitles.size;
   valueEl.textContent = combinedTitles.size.toLocaleString();
-  deltaEl.textContent = `+${ptOnlyCount.toLocaleString()} from PubTracker only`;
+  deltaEl.textContent = `${dimFundedTitles.size.toLocaleString()} Dimensions-funded + ${ptOnlyCount.toLocaleString()} from PubTracker`;
 }
 
 function renderOverviewPortfolioChart() {
