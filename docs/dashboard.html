@@ -72,6 +72,14 @@
     }
     footer.page-footer { color: var(--va-muted); font-size: .82rem; padding: 1.5rem 0 2rem; }
     footer.page-footer a { color: var(--va-primary); }
+    @media print {
+      .gov-banner, .hero, #filtersCard, #dashTabs, footer.page-footer,
+      .btn, #loadingMsg, #loadError, .form-check { display: none !important; }
+      .tab-pane.d-none { display: none !important; }
+      body { background: #fff; }
+      .chart-wrap, .chart-wrap-tall { break-inside: avoid; }
+      .section-card { break-inside: avoid; border: 1px solid #ccc; }
+    }
   </style>
 </head>
 <body>
@@ -99,7 +107,7 @@
     </div>
 
     <!-- Filters -->
-    <div class="section-card">
+    <div class="section-card" id="filtersCard">
       <div class="row g-2 align-items-end">
         <div class="col-md-2">
           <label class="form-label small mb-1">Fiscal year</label>
@@ -129,8 +137,8 @@
         <input class="form-check-input" type="checkbox" id="fltIncludeAll">
         <label class="form-check-label small" for="fltIncludeAll">Include SOP-excluded records (conference abstracts, corrections)</label>
       </div>
-      <div class="caption-note mt-2" id="filterSummary"></div>
     </div>
+    <div class="caption-note mb-2" id="filterSummary"></div>
 
     <ul class="nav nav-pills mb-3" id="dashTabs" role="tablist">
       <li class="nav-item"><button class="nav-link active" data-tab="overview">Overview</button></li>
@@ -138,6 +146,7 @@
       <li class="nav-item"><button class="nav-link" data-tab="facilities">Facilities</button></li>
       <li class="nav-item"><button class="nav-link" data-tab="ord">ORD Portfolios</button></li>
       <li class="nav-item"><button class="nav-link" data-tab="impact">Research Impact</button></li>
+      <li class="nav-item ms-auto"><button id="btnPrintPdf" class="btn btn-sm btn-outline-secondary">Print / Save as PDF</button></li>
     </ul>
 
     <div id="tab-overview" class="tab-pane">
@@ -153,13 +162,16 @@
         </dl>
       </details>
       <div class="row g-3">
-        <div class="col-md-7"><div class="section-card"><h6>VA fiscal-year trend</h6><p class="caption-note">Publication count by VA fiscal year (Oct–Sep), based on the derived canonical publication date.</p><div class="chart-wrap"><canvas id="chartFyTrend"></canvas></div></div></div>
-        <div class="col-md-5"><div class="section-card"><h6>Document types</h6><p class="caption-note">Top 10 Dimensions document types (e.g., Article, Preprint, Review Article) among the filtered records.</p><div class="chart-wrap"><canvas id="chartDocTypes"></canvas></div></div></div>
+        <div class="col-md-7"><div class="section-card"><div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">VA fiscal-year trend</h6><button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartFyTrend" data-filename="va_fiscal_year_trend">Download PNG</button></div><p class="caption-note">Publication count by VA fiscal year (Oct–Sep), based on the derived canonical publication date.</p><div class="chart-wrap"><canvas id="chartFyTrend"></canvas></div></div></div>
+        <div class="col-md-5"><div class="section-card"><div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">Document types</h6><button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartDocTypes" data-filename="document_types">Download PNG</button></div><p class="caption-note">Top 10 Dimensions document types (e.g., Article, Preprint, Review Article) among the filtered records.</p><div class="chart-wrap"><canvas id="chartDocTypes"></canvas></div></div></div>
       </div>
       <div class="row g-3">
         <div class="col-md-12">
           <div class="section-card">
-            <h6>Publications by ORD portfolio</h6>
+            <div class="d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">Publications by ORD portfolio</h6>
+              <button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartOrdOverview" data-filename="publications_by_ord_portfolio">Download PNG</button>
+            </div>
             <p class="caption-note">
               Combines both portfolio dimensions in one view: <strong>Broad Portfolios</strong> (funding-service evidence,
               e.g. Medical Health, Health Systems Research) and <strong>Actively Managed Portfolios</strong> (topic-keyword
@@ -184,13 +196,14 @@
                 <span class="caption-note" id="facilitiesChartPageInfo"></span>
                 <button id="facilitiesChartPrev" class="btn btn-sm btn-outline-secondary">Prev 10</button>
                 <button id="facilitiesChartNext" class="btn btn-sm btn-outline-secondary">Next 10</button>
+                <button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartTopFacilities" data-filename="top_facilities">Download PNG</button>
               </div>
             </div>
             <p class="caption-note">Publications matched per VAMC (see Facilities tab for match strength), sorted highest to lowest, 10 at a time.</p>
             <div class="chart-wrap chart-wrap-tall"><canvas id="chartTopFacilities"></canvas></div>
           </div>
         </div>
-        <div class="col-md-4"><div class="section-card"><h6>Fiscal-period coverage</h6><p class="caption-note">Whether each publication could be assigned a VA fiscal quarter. "Unavailable" means only a publication year (no month/day) was available.</p><div class="chart-wrap"><canvas id="chartFyCoverage"></canvas></div></div></div>
+        <div class="col-md-4"><div class="section-card"><div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">Fiscal-period coverage</h6><button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartFyCoverage" data-filename="fiscal_period_coverage">Download PNG</button></div><p class="caption-note">Whether each publication could be assigned a VA fiscal quarter. "Unavailable" means only a publication year (no month/day) was available.</p><div class="chart-wrap"><canvas id="chartFyCoverage"></canvas></div></div></div>
       </div>
     </div>
 
@@ -223,7 +236,10 @@
 
     <div id="tab-facilities" class="tab-pane d-none">
       <div class="section-card">
-        <h6>Facility attribution</h6>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Facility attribution</h6>
+          <button id="btnDownloadFacilitiesCsv" class="btn btn-sm btn-outline-success">Download CSV</button>
+        </div>
         <p class="caption-note">Matches are name-based evidence for review, not authoritative assignments. Station 101 umbrella terms are excluded.</p>
         <details class="metric-explainer">
           <summary>What do the columns mean?</summary>
@@ -307,21 +323,30 @@
       <div class="row g-3">
         <div class="col-md-6">
           <div class="section-card">
-            <h6>Broad Portfolio (VA funding service)</h6>
+            <div class="d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">Broad Portfolio (VA funding service)</h6>
+              <button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartOrdBroad" data-filename="ord_broad_portfolio">Download PNG</button>
+            </div>
             <p class="caption-note">Count of publications with each Broad Portfolio tag. Bars can overlap (a publication with two tags counts in two bars), so bars will not sum to "With Broad Portfolio evidence" above.</p>
             <div class="chart-wrap"><canvas id="chartOrdBroad"></canvas></div>
           </div>
         </div>
         <div class="col-md-6">
           <div class="section-card">
-            <h6>Actively Managed Portfolio (topic)</h6>
+            <div class="d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">Actively Managed Portfolio (topic)</h6>
+              <button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartOrdAmp" data-filename="ord_actively_managed_portfolio">Download PNG</button>
+            </div>
             <p class="caption-note">Count of publications matching each Actively Managed Portfolio's keywords. Same overlap caveat applies — these are topic matches, not confirmed funding.</p>
             <div class="chart-wrap"><canvas id="chartOrdAmp"></canvas></div>
           </div>
         </div>
       </div>
       <div class="section-card">
-        <h6>Broad Portfolio by facility</h6>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Broad Portfolio by facility</h6>
+          <button id="btnDownloadOrdFacilityCsv" class="btn btn-sm btn-outline-success">Download CSV</button>
+        </div>
         <p class="caption-note">For publications with both a facility match and a Broad Portfolio tag, counts how many publications link each facility to each portfolio. A publication with multiple facilities or portfolios contributes to multiple rows.</p>
         <div class="tbl-wrap">
           <table class="table table-sm table-striped">
@@ -351,8 +376,8 @@
         </dl>
       </details>
       <div class="row g-3">
-        <div class="col-md-6"><div class="section-card"><h6>Top journals</h6><p class="caption-note">The 15 journals publishing the most filtered records — a measure of where VA-affiliated research appears, not of journal quality.</p><div class="chart-wrap"><canvas id="chartJournals"></canvas></div></div></div>
-        <div class="col-md-6"><div class="section-card"><h6>Citation distribution</h6><p class="caption-note">How many publications fall into each citation-count bucket. Citation counts are capped for display at 100+; newer publications will naturally cluster at the low end regardless of eventual impact.</p><div class="chart-wrap"><canvas id="chartCitations"></canvas></div></div></div>
+        <div class="col-md-6"><div class="section-card"><div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">Top journals</h6><button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartJournals" data-filename="top_journals">Download PNG</button></div><p class="caption-note">The 15 journals publishing the most filtered records — a measure of where VA-affiliated research appears, not of journal quality.</p><div class="chart-wrap"><canvas id="chartJournals"></canvas></div></div></div>
+        <div class="col-md-6"><div class="section-card"><div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">Citation distribution</h6><button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartCitations" data-filename="citation_distribution">Download PNG</button></div><p class="caption-note">How many publications fall into each citation-count bucket. Citation counts are capped for display at 100+; newer publications will naturally cluster at the low end regardless of eventual impact.</p><div class="chart-wrap"><canvas id="chartCitations"></canvas></div></div></div>
       </div>
     </div>
   </div>
@@ -363,6 +388,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="./dashboard.js"></script>
 </body>
 </html>

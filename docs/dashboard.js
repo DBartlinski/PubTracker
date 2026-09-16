@@ -1,5 +1,7 @@
 'use strict';
 
+if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
+
 // ============================================================
 // STATE
 // ============================================================
@@ -103,7 +105,13 @@ function barChart(canvasId, labels, data, color = '#005ea2') {
       maintainAspectRatio: false,
       resizeDelay: 100,
       animation: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: 'end', align: 'end', color: '#1b1b1b', font: { size: 10 },
+          formatter: v => (typeof v === 'number' ? v.toLocaleString() : v),
+        },
+      },
       scales: { x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } } },
     },
   });
@@ -121,7 +129,13 @@ function horizontalBarChart(canvasId, labels, data, color = '#005ea2') {
       resizeDelay: 100,
       animation: false,
       indexAxis: 'y',
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: 'end', align: 'end', color: '#1b1b1b', font: { size: 10 },
+          formatter: v => (typeof v === 'number' ? v.toLocaleString() : v),
+        },
+      },
       scales: { y: { ticks: { autoSkip: false } } },
     },
   });
@@ -354,6 +368,30 @@ function downloadFilteredCsv() {
   URL.revokeObjectURL(url);
 }
 
+function downloadChartImage(canvasId, filename) {
+  const chart = charts[canvasId];
+  if (!chart) return;
+  const a = document.createElement('a');
+  a.href = chart.toBase64Image('image/png', 1);
+  a.download = `${filename}.png`;
+  a.click();
+}
+
+function exportTableToCsv(tbodyId, filename) {
+  const table = document.getElementById(tbodyId).closest('table');
+  const header = Array.from(table.querySelectorAll('thead th')).map(th => `"${th.textContent.trim().replace(/"/g, '""')}"`);
+  const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
+    Array.from(tr.querySelectorAll('td')).map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`).join(',')
+  );
+  const blob = new Blob([header.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ============================================================
 // FACILITIES
 // ============================================================
@@ -552,6 +590,12 @@ async function init() {
     });
     document.getElementById('facilitiesChartNext').addEventListener('click', () => {
       facilitiesChartPage++; renderTopFacilitiesChart();
+    });
+    document.getElementById('btnDownloadFacilitiesCsv').addEventListener('click', () => exportTableToCsv('facilitiesBody', 'facility_attribution.csv'));
+    document.getElementById('btnDownloadOrdFacilityCsv').addEventListener('click', () => exportTableToCsv('ordFacilityBody', 'ord_broad_portfolio_by_facility.csv'));
+    document.getElementById('btnPrintPdf').addEventListener('click', () => window.print());
+    document.querySelectorAll('.chart-download-btn').forEach(btn => {
+      btn.addEventListener('click', () => downloadChartImage(btn.dataset.canvas, btn.dataset.filename));
     });
 
     applyFilters();
