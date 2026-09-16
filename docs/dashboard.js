@@ -342,9 +342,11 @@ function renderOrdPortfolios() {
   const withBroad = filtered.filter(p => p.hasOrdEvidence).length;
   const withAmp = filtered.filter(p => (p.ordAmp || []).length > 0).length;
   const withNeither = filtered.filter(p => !p.hasOrdEvidence && (p.ordAmp || []).length === 0).length;
+  const withAnyOrd = total - withNeither;
 
   document.getElementById('ordMetrics').innerHTML = [
     metricCard('Publications', total.toLocaleString()),
+    metricCard('Total ORD-funded (unique)', withAnyOrd.toLocaleString(), fmtPct(withAnyOrd, total)),
     metricCard('With Broad Portfolio evidence', withBroad.toLocaleString(), fmtPct(withBroad, total)),
     metricCard('With Actively Managed tag', withAmp.toLocaleString(), fmtPct(withAmp, total)),
     metricCard(NO_SIGNAL_LABEL, withNeither.toLocaleString(), fmtPct(withNeither, total)),

@@ -303,26 +303,85 @@ def explode_tokens(publications: pd.DataFrame, id_column: str, value_column: str
     return pd.DataFrame(rows, columns=[id_column, label])
 
 
+def render_pubtracker_crossref(publications: pd.DataFrame) -> None:
+    use_pubtracker = st.checkbox(
+        "Cross-reference against PubTracker submissions (experimental, off by default)",
+        value=False,
+        key="dash_use_pubtracker_crossref",
+        help=(
+            "Adds a corroboration check for the subset of publications also manually submitted to PubTracker. "
+            "PubTracker only covers user-submitted records and is not comprehensive, so turning this on never "
+            "changes the ORD numbers above - it only adds an extra section below. Leave it off to keep the "
+            "Dimensions-only view (the default, unaffected by this feature)."
+        ),
+    )
+    if not use_pubtracker:
+        return
+
+    from processors.pubtracker_crossref import crossref_ord_funding, load_pubtracker_submissions
+
+    pubtracker_df = load_pubtracker_submissions()
+    if pubtracker_df.empty:
+        st.info("No PubTracker export file found in 'PubTracker Export/'. Add one there to enable this cross-reference.")
+        return
+
+    crossref = crossref_ord_funding(publications, pubtracker_df)
+    matched = crossref[crossref["PubTracker Match Found"]]
+    st.subheader("PubTracker corroboration (experimental)")
+    st.caption(
+        f"{len(matched):,} of {len(publications):,} filtered publications were also found in the PubTracker "
+        "submission export (matched by normalized title). This is a partial, user-submitted dataset - absence "
+        "from PubTracker does NOT mean a publication isn't ORD-funded, it may simply not have been submitted. "
+        "Use this only to spot-check agreement, not as a replacement for the Broad Portfolio funding-evidence "
+        "numbers above."
+    )
+    if matched.empty:
+        st.info("No filtered publications matched a PubTracker submission by title.")
+        return
+
+    agree = matched["Has ORD Funding Evidence"] & matched["PubTracker VA Funded"]
+    disagree = matched["Has ORD Funding Evidence"] != matched["PubTracker VA Funded"]
+    cols = st.columns(3)
+    cols[0].metric("Matched to PubTracker", f"{len(matched):,}")
+    cols[1].metric("Funding evidence agrees", f"{int(agree.sum()):,}")
+    cols[2].metric("Funding evidence disagrees", f"{int(disagree.sum()):,}")
+    if disagree.any():
+        st.dataframe(
+            matched.loc[disagree, [
+                "Publication ID", "Title", "Has ORD Funding Evidence", "ORD Broad Portfolios",
+                "PubTracker Reported Portfolio", "PubTracker VA Funded",
+            ]],
+            use_container_width=True, hide_index=True, height=300,
+        )
+
+
 def render_ord_portfolios(publications: pd.DataFrame, matches: pd.DataFrame) -> None:
     st.subheader("ORD portfolio attribution")
     st.caption(
         "Dimensions has no dedicated ORD field, so Broad Portfolio tags are inferred from VA grant award "
-        "prefixes and service names in the funding/acknowledgement text (high confidence), while Actively "
-        "Managed Portfolio tags are inferred from topic keywords in the title/abstract/MeSH terms (lower "
-        "confidence). A record can carry zero, one, or multiple tags in each dimension; treat these as "
-        "estimates, not an authoritative VA source of truth."
+        "prefixes and service names in the funding/acknowledgement text. Actively Managed Portfolio tags are "
+        "inferred from topic keywords in the title/abstract/MeSH terms, but a topic match alone is not funding "
+        "evidence, so an Actively Managed tag is only counted here once the record also carries ORD funding "
+        "evidence (a Broad Portfolio grant/service, or the portfolio's own name in the funding text). "
+        "Topic-only matches with no funding evidence are excluded from these totals. Treat all figures as "
+        "estimates, not an authoritative VA source of truth; PubTracker's own service field is not used as a "
+        "cross-check because it only covers user-submitted records and is not comprehensive."
     )
 
     total = len(publications)
     with_broad = publications["Has ORD Funding Evidence"].sum() if total else 0
     with_amp = publications["ORD Actively Managed Portfolios"].str.strip().ne("").sum() if total else 0
     with_neither = int(((~publications["Has ORD Funding Evidence"]) & publications["ORD Actively Managed Portfolios"].str.strip().eq("")).sum()) if total else 0
+    with_any_ord = total - with_neither
 
-    metric_columns = st.columns(4)
+    metric_columns = st.columns(5)
     metric_columns[0].metric("Publications", f"{total:,}")
-    metric_columns[1].metric("With Broad Portfolio evidence", f"{with_broad:,}", f"{100 * with_broad / total:.0f}%" if total else "0%")
-    metric_columns[2].metric("With Actively Managed tag", f"{with_amp:,}", f"{100 * with_amp / total:.0f}%" if total else "0%")
-    metric_columns[3].metric(ORD_NO_SIGNAL_LABEL, f"{with_neither:,}", f"{100 * with_neither / total:.0f}%" if total else "0%")
+    metric_columns[1].metric("Total ORD-funded (unique)", f"{with_any_ord:,}", f"{100 * with_any_ord / total:.0f}%" if total else "0%")
+    metric_columns[2].metric("With Broad Portfolio evidence", f"{with_broad:,}", f"{100 * with_broad / total:.0f}%" if total else "0%")
+    metric_columns[3].metric("With Actively Managed tag", f"{with_amp:,}", f"{100 * with_amp / total:.0f}%" if total else "0%")
+    metric_columns[4].metric(ORD_NO_SIGNAL_LABEL, f"{with_neither:,}", f"{100 * with_neither / total:.0f}%" if total else "0%")
+
+    render_pubtracker_crossref(publications)
 
     broad_long = explode_tokens(publications, "Publication ID", "ORD Broad Portfolios", "Broad Portfolio")
     amp_long = explode_tokens(publications, "Publication ID", "ORD Actively Managed Portfolios", "Actively Managed Portfolio")

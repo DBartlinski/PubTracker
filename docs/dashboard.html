@@ -245,37 +245,45 @@
       <div class="section-card">
         <p class="caption-note">
           Dimensions has no dedicated ORD field, so Broad Portfolio tags are inferred from VA grant award prefixes
-          and service names in funding/acknowledgement text (high confidence), while Actively Managed Portfolio
-          tags are inferred from topic keywords in title/abstract/MeSH terms (lower confidence). A record can carry
-          zero, one, or multiple tags in each dimension; treat these as estimates, not an authoritative VA source of truth.
+          and service names in funding/acknowledgement text. Actively Managed Portfolio tags are inferred from
+          topic keywords in title/abstract/MeSH terms, but a topic match alone is not funding evidence — an
+          Actively Managed tag is only counted here once the record also carries ORD funding evidence (a Broad
+          Portfolio grant/service, or the portfolio's own name in the funding text). Topic-only matches with no
+          funding evidence are excluded from these totals. Treat all figures as estimates, not an authoritative
+          VA source of truth; PubTracker's own service field is not used as a cross-check because it only covers
+          user-submitted records and is not comprehensive.
         </p>
       </div>
       <div class="row g-3 mb-3" id="ordMetrics"></div>
       <details class="metric-explainer" open>
-        <summary>How to read these four numbers</summary>
+        <summary>How to read these five numbers</summary>
         <dl class="mt-2 mb-0 row">
           <dt class="col-sm-3">Publications</dt>
-          <dd class="col-sm-9">Total records passing the current filters — the denominator for the three percentages below.</dd>
+          <dd class="col-sm-9">Total records passing the current filters — the denominator for the four percentages below.</dd>
+          <dt class="col-sm-3">Total ORD-funded (unique)</dt>
+          <dd class="col-sm-9">The deduplicated count of publications with <strong>any</strong> ORD funding evidence —
+            Broad Portfolio evidence, an Actively Managed tag, or both. Use this number, not the sum of the two
+            categories below, as the true funded total; summing them would double-count publications that carry both tags.</dd>
           <dt class="col-sm-3">With Broad Portfolio evidence</dt>
           <dd class="col-sm-9">Publications where we found a VA grant award prefix (e.g., CX, BX, RX, HX) or an explicit VA
-            research-service name (e.g., "Health Systems Research") in the funding or acknowledgement text. This is the
-            <strong>higher-confidence</strong> signal — treat it as "likely VA-funded via this service," not a certainty.</dd>
+            research-service name (e.g., "Health Systems Research") in the funding or acknowledgement text.</dd>
           <dt class="col-sm-3">With Actively Managed tag</dt>
           <dd class="col-sm-9">Publications where the title, abstract, or MeSH terms matched keywords for one of the six
-            Actively Managed Portfolios (e.g., "traumatic brain injury," "suicide prevention"). This is <strong>lower-confidence</strong>
-            than Broad Portfolio evidence — it reflects the paper's subject matter, not confirmed VA funding, and a paper can
-            match on subject alone with no VA funding tie at all.</dd>
+            Actively Managed Portfolios (e.g., "traumatic brain injury," "suicide prevention") <strong>and</strong> the
+            record also has ORD funding evidence. Publications that only match the topic with no funding evidence are not
+            counted here — a paper can discuss a topic like suicide prevention with no VA funding tie at all, so a topic
+            match alone is not treated as ORD-funded.</dd>
           <dt class="col-sm-3">No ORD signal detected</dt>
-          <dd class="col-sm-9">Publications with neither a Broad Portfolio nor an Actively Managed tag. This is <strong>expected
-            to be the majority</strong> of records: most publications in this dataset simply have a VA-affiliated author and are
+          <dd class="col-sm-9">Publications with no ORD funding evidence at all. This is <strong>expected to be the
+            majority</strong> of records: most publications in this dataset simply have a VA-affiliated author and are
             not VA-funded research, so there is nothing in the text for our detector to find. A high count here is normal, not
             a data quality problem.</dd>
         </dl>
         <p class="caption-note mt-2 mb-0">
-          <strong>Interpretation guidance:</strong> A publication can have both a Broad Portfolio and an Actively Managed tag,
-          only one, or neither — the three "with" categories are not mutually exclusive and will not sum to the total.
-          Use Broad Portfolio numbers when you need a defensible funding-service estimate; use Actively Managed numbers only
-          as a directional signal of topic volume, not as a funding claim.
+          <strong>Interpretation guidance:</strong> A publication can have both a Broad Portfolio and an Actively Managed tag
+          or only one — the two "with" categories are not mutually exclusive and will not sum to "Total ORD-funded."
+          Use Broad Portfolio numbers when you need a defensible funding-service estimate; Actively Managed numbers are a
+          narrower view of which funded publications also match a specific cross-cutting topic.
         </p>
       </details>
       <div class="row g-3">

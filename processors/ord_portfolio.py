@@ -2,9 +2,9 @@
 
 Dimensions has no dedicated ORD field, so this infers portfolio membership from
 free text (Funding, Acknowledgements, Authors Affiliations, Title, Abstract, MeSH
-terms) using two independent signals:
+terms) using two signals:
 
-1. Broad Portfolio (high confidence) - VA grant award number prefixes and explicit
+1. Broad Portfolio (funding evidence) - VA grant award number prefixes and explicit
    service names. ORD's four legacy R&D services were renamed "Broad Portfolios"
    but kept the same award-number prefixes (verified against research.va.gov):
      CX -> Clinical Science R&D / "Brain, Behavioral and Mental Health"
@@ -13,9 +13,15 @@ terms) using two independent signals:
      HX -> Health Services R&D / "Health Systems Research"
    CSP and QUERI are funding sub-programs surfaced separately when named explicitly.
 
-2. Actively Managed Portfolio (lower confidence) - six cross-cutting, topic-based
-   portfolios that span multiple Broad Portfolios. Detected via keyword matching
-   against title/abstract/MeSH text since there is no grant-prefix equivalent.
+2. Actively Managed Portfolio (topic keyword match) - six cross-cutting portfolios
+   detected via keyword matching against title/abstract/MeSH text, since there is
+   no grant-prefix equivalent for them. A topic-keyword match alone is NOT funding
+   evidence - a VA-affiliated author can publish on a topic (e.g. suicide prevention)
+   without ORD funding. An Actively Managed Portfolio tag is only counted as ORD-funded
+   when the record also carries funding evidence: either a Broad Portfolio grant
+   prefix/service name, or the Actively Managed Portfolio's own name appears directly
+   in the funding/acknowledgement text. Topic-only matches with no funding evidence are
+   kept in a separate "unconfirmed" field and excluded from all funded-portfolio tallies.
 
 A publication can carry zero, one, or multiple tags in each dimension.
 """
@@ -147,16 +153,22 @@ def tag_publication(row: pd.Series) -> dict:
     topic_text = _combine_text(row, TOPIC_TEXT_COLUMNS)
 
     broad_codes = extract_broad_portfolios(funding_text)
-    amps = extract_actively_managed_portfolios(topic_text)
-    # Funding text can also carry an explicit AMP name (e.g. "PACT Act Toxic Exposure Funds").
-    amps |= extract_actively_managed_portfolios(funding_text)
+    amp_from_funding = extract_actively_managed_portfolios(funding_text)
+    amp_from_topic = extract_actively_managed_portfolios(topic_text)
+
+    has_funding_evidence = bool(broad_codes) or bool(amp_from_funding)
+    # A topic-only AMP match is not funding evidence; only count it once the
+    # record already has some other ORD funding evidence.
+    confirmed_amps = amp_from_funding | (amp_from_topic if has_funding_evidence else set())
+    unconfirmed_amps = amp_from_topic - confirmed_amps
 
     broad_names = sorted(BROAD_PORTFOLIO_NAMES[code] for code in broad_codes)
     return {
         "ORD Broad Portfolio Codes": "; ".join(sorted(broad_codes)),
         "ORD Broad Portfolios": "; ".join(broad_names),
-        "ORD Actively Managed Portfolios": "; ".join(sorted(amps)),
-        "Has ORD Funding Evidence": bool(broad_codes),
+        "ORD Actively Managed Portfolios": "; ".join(sorted(confirmed_amps)),
+        "ORD Actively Managed Portfolios (Topic Only, Unconfirmed)": "; ".join(sorted(unconfirmed_amps)),
+        "Has ORD Funding Evidence": has_funding_evidence,
     }
 
 
