@@ -511,10 +511,13 @@ function renderOrdFacilityGapReport(ordFundedRows) {
     <div class="section-card mt-3">
       <h6 class="mb-2">ORD funding reporting gaps by facility</h6>
       <p class="caption-note">
-        <strong>${missingCount.toLocaleString()} of ${total.toLocaleString()}</strong> ORD-funded Dimensions publications under
-        the current filters were NOT found (by title match) in the PubTracker submission export — meaning that facility likely
-        did not report those publications to PubTracker. Overall reporting rate: <strong>${overallPct}%</strong>. Sorted by
-        largest reporting gap first; click "View missing" to see the individual unreported records for a facility.
+        "ORD-funded" here means a Dimensions publication with confirmed funding-text evidence OR a title match to a
+        PubTracker submission (PubTracker submissions are ORD-funded by definition) — most Dimensions records are
+        neither and are excluded from this report entirely. Of those ORD-funded records,
+        <strong>${missingCount.toLocaleString()} of ${total.toLocaleString()}</strong> were NOT found (by title match) in the
+        PubTracker submission export — meaning that facility likely did not report those publications to PubTracker.
+        Overall reporting rate: <strong>${overallPct}%</strong>. Sorted by largest reporting gap first; click
+        "View missing" to see the individual unreported records for a facility.
       </p>
       <div class="row g-3 mb-2">
         ${metricCard('ORD-funded publications', total.toLocaleString())}
@@ -554,10 +557,12 @@ async function updatePubtrackerCrossref() {
     return;
   }
 
-  // Primary report: of the ORD-funded Dimensions publications, which facilities are under-reporting to PubTracker?
+  // Primary report: an ORD-funded Dimensions publication is one with confirmed funding-text
+  // evidence OR one that title-matches a PubTracker submission (PubTracker submissions are
+  // ORD-funded by definition) - most Dimensions records are neither and are excluded entirely.
   const ordFundedRows = filtered
-    .filter(p => p.hasOrdEvidence)
-    .map(p => ({ pub: p, foundInPT: lookup.has(normalizeTitle(p.title)) }));
+    .map(p => ({ pub: p, foundInPT: lookup.has(normalizeTitle(p.title)) }))
+    .filter(row => row.pub.hasOrdEvidence || row.foundInPT);
   const gapReportHtml = renderOrdFacilityGapReport(ordFundedRows);
 
   // Secondary check: for publications found in both sources, does the funding flag agree?
