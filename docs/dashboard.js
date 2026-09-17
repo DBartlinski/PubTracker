@@ -414,6 +414,129 @@ function renderFacilities() {
 // ============================================================
 // ORD PORTFOLIOS
 // ============================================================
+// ============================================================
+// ORD FUNDING REPORTING GAPS BY FACILITY
+// ============================================================
+let ordGapStats = []; // [{facility, total, found, missing:[pub,...]}], populated on each render
+
+/** Group ORD-funded publications by facility and tally how many were found vs missing in PubTracker. */
+function buildOrdFacilityGapStats(ordFundedRows) {
+  const byFacility = new Map();
+  ordFundedRows.forEach(row => {
+    const facilities = (row.pub.facilities && row.pub.facilities.length) ? row.pub.facilities : ['(No facility match)'];
+    facilities.forEach(f => {
+      if (!byFacility.has(f)) byFacility.set(f, { facility: f, total: 0, found: 0, missing: [] });
+      const stat = byFacility.get(f);
+      stat.total += 1;
+      if (row.foundInPT) stat.found += 1;
+      else stat.missing.push(row.pub);
+    });
+  });
+  return Array.from(byFacility.values()).sort((a, b) => (b.total - b.found) - (a.total - a.found));
+}
+
+function showOrdGapDetail(facility) {
+  const stat = ordGapStats.find(s => s.facility === facility);
+  const panel = document.getElementById('ordGapDetailPanel');
+  if (!stat || !panel) return;
+  if (!stat.missing.length) {
+    panel.innerHTML = `<p class="caption-note mb-0">No missing records for ${escapeHtml(facility)} — every ORD-funded publication was found in PubTracker.</p>`;
+    panel.classList.remove('d-none');
+    return;
+  }
+  const rows = stat.missing.map(p => `<tr>
+    <td>${escapeHtml(p.id || '')}</td>
+    <td>${escapeHtml(p.title || '')}</td>
+    <td>${p.date || ''}</td>
+    <td>${escapeHtml((p.ordBroad || []).join('; '))}</td>
+    <td>${p.dimensionsLink ? `<a href="${p.dimensionsLink}" target="_blank" rel="noopener">Dimensions</a>` : ''}</td>
+  </tr>`).join('');
+  panel.innerHTML = `
+    <h6 class="mt-2">Unreported ORD-funded records — ${escapeHtml(facility)}</h6>
+    <div class="tbl-wrap"><table class="table table-sm table-striped mb-0">
+      <thead><tr><th>Publication ID</th><th>Title</th><th>Date</th><th>ORD Broad Portfolio</th><th>Link</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  panel.classList.remove('d-none');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function downloadOrdGapCsv() {
+  const header = ['Facility', 'ORD-funded', 'Found in PubTracker', 'Missing', 'Compliance %'];
+  const rows = ordGapStats.map(s => {
+    const pct = s.total ? Math.round((s.found / s.total) * 100) : 0;
+    return [s.facility, s.total, s.found, s.total - s.found, `${pct}%`]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+  const blob = new Blob([header.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ord_funding_reporting_gaps_by_facility.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Build the "total discrepancy + facility breakdown" report: which facilities' ORD-funded pubs are missing from PubTracker. */
+function renderOrdFacilityGapReport(ordFundedRows) {
+  const total = ordFundedRows.length;
+  const foundCount = ordFundedRows.filter(r => r.foundInPT).length;
+  const missingCount = total - foundCount;
+  const overallPct = total ? Math.round((foundCount / total) * 100) : 0;
+
+  ordGapStats = buildOrdFacilityGapStats(ordFundedRows);
+
+  if (total === 0) {
+    return `<div class="section-card mt-3">
+      <h6 class="mb-2">ORD funding reporting gaps by facility</h6>
+      <p class="caption-note mb-0">No ORD-funded publications under the current filters.</p>
+    </div>`;
+  }
+
+  const bodyRows = ordGapStats.map(s => {
+    const missing = s.total - s.found;
+    const pct = s.total ? Math.round((s.found / s.total) * 100) : 0;
+    const cls = pct >= 100 ? 'pct-positive' : (pct === 0 ? 'pct-negative' : 'pct-undefined');
+    return `<tr>
+      <td>${escapeHtml(s.facility)}</td>
+      <td class="text-end">${s.total}</td>
+      <td class="text-end">${s.found}</td>
+      <td class="text-end">${missing}</td>
+      <td class="text-end ${cls}">${pct}%</td>
+      <td><button type="button" class="btn btn-sm btn-outline-secondary ord-gap-view-btn" data-facility="${escapeHtml(s.facility)}" ${missing === 0 ? 'disabled' : ''}>${missing ? `View ${missing} missing` : 'None missing'}</button></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="section-card mt-3">
+      <h6 class="mb-2">ORD funding reporting gaps by facility</h6>
+      <p class="caption-note">
+        <strong>${missingCount.toLocaleString()} of ${total.toLocaleString()}</strong> ORD-funded Dimensions publications under
+        the current filters were NOT found (by title match) in the PubTracker submission export — meaning that facility likely
+        did not report those publications to PubTracker. Overall reporting rate: <strong>${overallPct}%</strong>. Sorted by
+        largest reporting gap first; click "View missing" to see the individual unreported records for a facility.
+      </p>
+      <div class="row g-3 mb-2">
+        ${metricCard('ORD-funded publications', total.toLocaleString())}
+        ${metricCard('Found in PubTracker', foundCount.toLocaleString(), `${overallPct}% reporting rate`)}
+        ${metricCard('Missing from PubTracker', missingCount.toLocaleString(), `${100 - overallPct}% gap`)}
+      </div>
+      <div class="d-flex justify-content-end mb-2">
+        <button id="btnDownloadOrdGapCsv" type="button" class="btn btn-sm btn-outline-success">Download facility gap CSV</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="table table-sm table-striped">
+          <thead><tr><th>Facility</th><th class="text-end">ORD-funded</th><th class="text-end">Found in PubTracker</th><th class="text-end">Missing</th><th class="text-end">Compliance %</th><th>Details</th></tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+      <div id="ordGapDetailPanel" class="d-none"></div>
+    </div>`;
+}
+
+// ============================================================
+// ORD PORTFOLIOS
+// ============================================================
 async function updatePubtrackerCrossref() {
   const checkbox = document.getElementById('fltPubtrackerCrossref');
   const container = document.getElementById('pubtrackerCrossrefResults');
@@ -431,43 +554,56 @@ async function updatePubtrackerCrossref() {
     return;
   }
 
+  // Primary report: of the ORD-funded Dimensions publications, which facilities are under-reporting to PubTracker?
+  const ordFundedRows = filtered
+    .filter(p => p.hasOrdEvidence)
+    .map(p => ({ pub: p, foundInPT: lookup.has(normalizeTitle(p.title)) }));
+  const gapReportHtml = renderOrdFacilityGapReport(ordFundedRows);
+
+  // Secondary check: for publications found in both sources, does the funding flag agree?
   const matched = filtered
     .map(p => ({ pub: p, pt: lookup.get(normalizeTitle(p.title)) }))
     .filter(row => row.pt);
-  if (matched.length === 0) {
-    container.innerHTML = '<p class="caption-note mb-0">No filtered publications matched a PubTracker submission by title.</p>';
-    return;
+
+  let agreementHtml = '<p class="caption-note mb-0">No filtered publications matched a PubTracker submission by title.</p>';
+  if (matched.length > 0) {
+    const agree = matched.filter(row => Boolean(row.pub.hasOrdEvidence) === Boolean(row.pt.vaFunded)).length;
+    const disagreeRows = matched.filter(row => Boolean(row.pub.hasOrdEvidence) !== Boolean(row.pt.vaFunded));
+
+    const tableRows = disagreeRows.slice(0, 200).map(row => `<tr>
+      <td>${escapeHtml(row.pub.id)}</td>
+      <td>${escapeHtml(row.pub.title)}</td>
+      <td>${row.pub.hasOrdEvidence ? 'Yes' : 'No'}</td>
+      <td>${escapeHtml((row.pub.ordBroad || []).join('; '))}</td>
+      <td>${escapeHtml(row.pt.reportedPortfolio || '')}</td>
+      <td>${row.pt.vaFunded ? 'Yes' : 'No'}</td>
+    </tr>`).join('');
+
+    agreementHtml = `
+      <p class="caption-note">
+        ${matched.length.toLocaleString()} of ${filtered.length.toLocaleString()} filtered publications were also found in the PubTracker
+        submission export (matched by normalized title). This is a partial, user-submitted dataset — absence from
+        PubTracker does NOT mean a publication isn't ORD-funded, it may simply not have been submitted. Use this
+        only to spot-check agreement, not as a replacement for the Broad Portfolio funding-evidence numbers above.
+      </p>
+      <div class="row g-3 mb-2">
+        ${metricCard('Matched to PubTracker', matched.length.toLocaleString())}
+        ${metricCard('Funding evidence agrees', agree.toLocaleString())}
+        ${metricCard('Funding evidence disagrees', disagreeRows.length.toLocaleString())}
+      </div>
+      ${disagreeRows.length ? `<div class="tbl-wrap"><table class="table table-sm table-striped">
+        <thead><tr><th>Publication ID</th><th>Title</th><th>Has ORD Funding Evidence</th><th>ORD Broad Portfolios</th><th>PubTracker Reported Portfolio</th><th>PubTracker VA Funded</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table></div>` : ''}`;
   }
 
-  const agree = matched.filter(row => Boolean(row.pub.hasOrdEvidence) === Boolean(row.pt.vaFunded)).length;
-  const disagreeRows = matched.filter(row => Boolean(row.pub.hasOrdEvidence) !== Boolean(row.pt.vaFunded));
+  container.innerHTML = `${gapReportHtml}<div class="section-card mt-3"><h6 class="mb-2">Funding-flag agreement (matched records)</h6>${agreementHtml}</div>`;
 
-  const tableRows = disagreeRows.slice(0, 200).map(row => `<tr>
-    <td>${escapeHtml(row.pub.id)}</td>
-    <td>${escapeHtml(row.pub.title)}</td>
-    <td>${row.pub.hasOrdEvidence ? 'Yes' : 'No'}</td>
-    <td>${escapeHtml((row.pub.ordBroad || []).join('; '))}</td>
-    <td>${escapeHtml(row.pt.reportedPortfolio || '')}</td>
-    <td>${row.pt.vaFunded ? 'Yes' : 'No'}</td>
-  </tr>`).join('');
-
-  container.innerHTML = `
-    <p class="caption-note">
-      ${matched.length.toLocaleString()} of ${filtered.length.toLocaleString()} filtered publications were also found in the PubTracker
-      submission export (matched by normalized title). This is a partial, user-submitted dataset — absence from
-      PubTracker does NOT mean a publication isn't ORD-funded, it may simply not have been submitted. Use this
-      only to spot-check agreement, not as a replacement for the Broad Portfolio funding-evidence numbers above.
-    </p>
-    <div class="row g-3 mb-2">
-      ${metricCard('Matched to PubTracker', matched.length.toLocaleString())}
-      ${metricCard('Funding evidence agrees', agree.toLocaleString())}
-      ${metricCard('Funding evidence disagrees', disagreeRows.length.toLocaleString())}
-    </div>
-    ${disagreeRows.length ? `<div class="tbl-wrap"><table class="table table-sm table-striped">
-      <thead><tr><th>Publication ID</th><th>Title</th><th>Has ORD Funding Evidence</th><th>ORD Broad Portfolios</th><th>PubTracker Reported Portfolio</th><th>PubTracker VA Funded</th></tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table></div>` : ''}
-  `;
+  container.querySelectorAll('.ord-gap-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => showOrdGapDetail(btn.dataset.facility));
+  });
+  const dlBtn = document.getElementById('btnDownloadOrdGapCsv');
+  if (dlBtn) dlBtn.addEventListener('click', downloadOrdGapCsv);
 }
 
 function renderOrdPortfolios() {
