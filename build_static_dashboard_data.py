@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root))
 from processors.dashboard_data import load_dashboard_dataset, split_values
 from processors.pubtracker_crossref import load_pubtracker_submissions, find_latest_export, _normalize_title
 from processors.pubtracker_processor import process_pubtracker, get_quarter_label
-from processors.dimensions_processor import process_dimensions
+from processors.dimensions_processor import process_dimensions_by_quarter
 from processors.compliance_calculator import calculate_compliance, load_vamc_reference
 from processors.ord_portfolio import tag_publications
 
@@ -110,22 +110,24 @@ def build_compliance_payload() -> dict | None:
     ord_funded_mask = dim_raw["Has ORD Funding Evidence"].fillna(False) | title_matched
     dim_raw = dim_raw[ord_funded_mask].copy()
 
-    dim_pub_list, _ = process_dimensions(dim_raw)
+    # Split by each record's own publication date instead of one flat pool applied
+    # identically to every quarter, so quarter-over-quarter Dimensions counts differ.
+    dim_pub_list, _ = process_dimensions_by_quarter(dim_raw)
 
     pt_raw = pd.read_excel(pt_path, sheet_name=0)
     pt_counts, _ = process_pubtracker(pt_raw)
 
     vamc_ref = load_vamc_reference()
     result_df, _, all_quarters, diagnostics = calculate_compliance(pt_counts, dim_pub_list, vamc_ref)
-    quarter_labels = [get_quarter_label(fy, q) for fy, q in all_quarters]
+    quarter_labels = [get_quarter_label(fy, q) for fy, q in all_quarters] + ["FY Total"]
     not_in_dim_map = dict(zip(vamc_ref["vamc_display"].astype(str), vamc_ref["not_in_dimensions"]))
 
     pub_title_map = {}
     if "Publication ID" in dim_raw.columns and "Title" in dim_raw.columns:
         pub_title_map = dict(zip(dim_raw["Publication ID"].astype(str), dim_raw["Title"]))
 
-    # Dimensions matches are the same set across quarters (pre-filtered per SOP) - use the first.
-    quarter_diag = diagnostics.get(all_quarters[0], {}) if all_quarters else {}
+    # Year-deduplicated pool (dim_count/matched_pub_ids consistent across quarters) for corroboration.
+    fy_diag = diagnostics.get("FY_TOTAL", {})
 
     vamcs = []
     total_corroborated = 0
@@ -141,7 +143,7 @@ def build_compliance_payload() -> dict | None:
             }
             for label in quarter_labels
         }
-        matched_ids = quarter_diag.get(vamc_name, {}).get("matched_pub_ids", [])
+        matched_ids = fy_diag.get(vamc_name, {}).get("matched_pub_ids", [])
         matched_titles = [pub_title_map.get(pid) for pid in matched_ids if pub_title_map.get(pid)]
         corroborated = sum(1 for t in matched_titles if _normalize_title(t) in pubtracker_norm_titles)
         total_corroborated += corroborated

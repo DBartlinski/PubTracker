@@ -150,24 +150,45 @@ def calculate_compliance(pt_counts, dim_pub_list, vamc_ref=None):
     Parameters
     ----------
     pt_counts    : dict  {(fy_year, q): {station_no_str: count}}
-    dim_pub_list : list  [(pub_id, [org_name, ...])]  – all Dimensions records
-                   (assumed to be pre-filtered by the user to the quarter of interest)
+    dim_pub_list : list OR dict
+                   - list [(pub_id, [org_name, ...])]: one flat pool applied to every
+                     quarter identically (legacy behavior - used when the caller can't
+                     split Dimensions records by their own publication date, e.g. a
+                     manually-uploaded, already quarter-filtered Dimensions export).
+                   - dict {(fy_year, q): [(pub_id, [org_name, ...]), ...]}: per-quarter
+                     pools, each Dimensions record assigned to the quarter of its own
+                     publication date (see dimensions_processor.process_dimensions_by_quarter).
     vamc_ref     : DataFrame or None (loaded from file if None)
 
     Returns
     -------
-    result_df   : DataFrame  – compliance table ready for download
+    result_df   : DataFrame  – compliance table (per quarter + a "FY Total" column set) ready for download
     report_text : str        – human-readable summary report
     all_quarters: list       – sorted [(fy_year, q), ...] from PubTracker
-    diagnostics : dict       – per-quarter per-vamc diagnostic info
+    diagnostics : dict       – per-quarter per-vamc diagnostic info, plus a 'FY_TOTAL' key
+                   (year-deduplicated dim_count/matched_pub_ids per vamc)
     """
     if vamc_ref is None:
         vamc_ref = load_vamc_reference()
 
     all_quarters = sorted(pt_counts.keys())
 
+    if isinstance(dim_pub_list, dict):
+        dim_by_quarter = dim_pub_list
+        seen_ids = set()
+        combined_dim_pub_list = []
+        for quarter_key in all_quarters:
+            for pub_id, orgs in dim_by_quarter.get(quarter_key, []):
+                if pub_id not in seen_ids:
+                    seen_ids.add(pub_id)
+                    combined_dim_pub_list.append((pub_id, orgs))
+    else:
+        dim_by_quarter = None
+        combined_dim_pub_list = dim_pub_list
+
     rows = []
     diagnostics = {q: {} for q in all_quarters}
+    fy_diagnostics = {}
 
     for _, ref_row in vamc_ref.iterrows():
         vamc_display = str(ref_row['vamc_display'])
@@ -182,9 +203,12 @@ def calculate_compliance(pt_counts, dim_pub_list, vamc_ref=None):
             'VA Funded': va_funded if va_funded != 'nan' else '',
         }
 
-        # Pre-compute Dimensions count once (same pool used for all quarters)
-        dim_count, matched_ids = count_dimensions_for_vamc(vamc_display, not_in_dim, dim_pub_list)
+        # Year-total Dimensions count, deduplicated across quarters (same pool for all
+        # quarters when dim_pub_list is a flat legacy list).
+        fy_dim_count, fy_matched_ids = count_dimensions_for_vamc(vamc_display, not_in_dim, combined_dim_pub_list)
+        fy_diagnostics[vamc_display] = {'dim_count': fy_dim_count, 'matched_pub_ids': fy_matched_ids}
 
+        fy_pt_total = 0
         for quarter_key in all_quarters:
             fy_year, q = quarter_key
             label = f"FY{str(fy_year)[2:]} Q{q}"
@@ -192,6 +216,14 @@ def calculate_compliance(pt_counts, dim_pub_list, vamc_ref=None):
             # PubTracker count (uses both primary and alternate station numbers)
             pt_q = pt_counts.get(quarter_key, {})
             pt_count = count_pubtracker_for_vamc(station_no, alt_station_no, pt_q)
+            fy_pt_total += pt_count
+
+            if dim_by_quarter is not None:
+                dim_count, matched_ids = count_dimensions_for_vamc(
+                    vamc_display, not_in_dim, dim_by_quarter.get(quarter_key, [])
+                )
+            else:
+                dim_count, matched_ids = fy_dim_count, fy_matched_ids
 
             # Store diagnostics
             diagnostics[quarter_key][vamc_display] = {
@@ -217,7 +249,22 @@ def calculate_compliance(pt_counts, dim_pub_list, vamc_ref=None):
             row[f'{label} Dimensions Count'] = dim_count
             row[f'{label} % Entered'] = pct
 
+        # Year-total column set (PT summed across quarters, Dimensions deduplicated)
+        if not_in_dim:
+            fy_pct = '100%'
+        elif fy_pt_total == 0 and fy_dim_count == 0:
+            fy_pct = '100%'
+        elif fy_dim_count == 0:
+            fy_pct = ''
+        else:
+            fy_pct = f"{round(fy_pt_total / fy_dim_count * 100)}%"
+        row['FY Total PubTracker Count'] = fy_pt_total
+        row['FY Total Dimensions Count'] = fy_dim_count
+        row['FY Total % Entered'] = format_compliance_pct(fy_pct)
+
         rows.append(row)
+
+    diagnostics['FY_TOTAL'] = fy_diagnostics
 
     # TOTAL row
     total_row = {'VAMC': 'TOTAL', 'Station No.': '', 'VA Funded': ''}
@@ -232,6 +279,13 @@ def calculate_compliance(pt_counts, dim_pub_list, vamc_ref=None):
         total_row[f'{label} PubTracker Count'] = total_pt
         total_row[f'{label} Dimensions Count'] = total_dim
         total_row[f'{label} % Entered'] = total_pct
+
+    total_fy_pt = sum(r.get('FY Total PubTracker Count', 0) for r in rows)
+    total_fy_dim = sum(r.get('FY Total Dimensions Count', 0) for r in rows)
+    total_fy_pct = f"{round(total_fy_pt / total_fy_dim * 100)}%" if total_fy_dim > 0 else ''
+    total_row['FY Total PubTracker Count'] = total_fy_pt
+    total_row['FY Total Dimensions Count'] = total_fy_dim
+    total_row['FY Total % Entered'] = format_compliance_pct(total_fy_pct)
     rows.append(total_row)
 
     result_df = pd.DataFrame(rows)

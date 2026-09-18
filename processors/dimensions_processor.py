@@ -144,3 +144,79 @@ def process_dimensions(df):
         pub_list.append((pub_id, orgs))
 
     return pub_list, date_info
+
+
+def process_dimensions_by_quarter(df):
+    """
+    Like process_dimensions, but groups publications into VA fiscal-year quarters
+    using each record's own publication date, instead of returning one flat pool
+    that gets applied identically to every quarter.
+
+    Rows with no parseable publication date are omitted from the per-quarter
+    buckets (they still count toward date_range_info's overall 'count').
+
+    Returns:
+        dict: {(fy_year, quarter): [(pub_id_str, [org_name_str, ...]), ...]}
+        dict: date_range_info – {'min_date': ..., 'max_date': ..., 'count': ...}
+    """
+    if 'Document Type' in df.columns:
+        df = df[
+            ~df['Document Type'].str.strip().str.lower().isin(EXCLUDED_DOC_TYPES)
+        ].copy()
+
+    org_col = next(
+        (c for c in df.columns if 'research organizations' in c.lower() and 'standardized' in c.lower()),
+        None,
+    )
+    if org_col is None:
+        raise ValueError(
+            "Could not find 'Research Organizations - standardized' column in Dimensions file. "
+            "Ensure the file is a standard Dimensions XLSX/CSV export."
+        )
+
+    pub_id_col = 'Publication ID' if 'Publication ID' in df.columns else df.columns[1]
+
+    pub_date_cols = [c for c in df.columns if 'publication date' in c.lower()]
+    pub_date_print = next((c for c in pub_date_cols if 'print' in c.lower()), None)
+    pub_date_online = next((c for c in pub_date_cols if 'online' in c.lower()), None)
+    pub_date_generic = next(
+        (c for c in pub_date_cols
+         if 'online' not in c.lower() and 'print' not in c.lower()),
+        None,
+    )
+    pub_date_col = pub_date_generic or pub_date_print or pub_date_online
+
+    def get_row_date(row):
+        if pub_date_print:
+            d = _parse_pub_date(row.get(pub_date_print))
+            if not pd.isna(d):
+                return d
+        if pub_date_online:
+            d = _parse_pub_date(row.get(pub_date_online))
+            if not pd.isna(d):
+                return d
+        if pub_date_col:
+            d = _parse_pub_date(row.get(pub_date_col))
+            if not pd.isna(d):
+                return d
+        return pd.NaT
+
+    date_info = {'min_date': None, 'max_date': None, 'count': len(df)}
+    if pub_date_col or pub_date_print or pub_date_online:
+        dates = df.apply(get_row_date, axis=1).dropna()
+        if not dates.empty:
+            date_info['min_date'] = dates.min()
+            date_info['max_date'] = dates.max()
+
+    buckets = {}
+    for _, row in df.iterrows():
+        d = get_row_date(row)
+        if pd.isna(d):
+            continue
+        fy_year, q = get_fy_quarter(d)
+        pub_id = str(row.get(pub_id_col, ''))
+        orgs_raw = str(row.get(org_col, ''))
+        orgs = [o.strip() for o in orgs_raw.split(';') if o.strip() and orgs_raw != 'nan']
+        buckets.setdefault((fy_year, q), []).append((pub_id, orgs))
+
+    return buckets, date_info

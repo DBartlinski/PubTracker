@@ -9,7 +9,7 @@ import streamlit as st
 sys.path.insert(0, os.path.dirname(__file__))
 
 from processors.pubtracker_processor import process_pubtracker, get_quarter_label
-from processors.dimensions_processor import read_dimensions_df, process_dimensions
+from processors.dimensions_processor import read_dimensions_df, process_dimensions_by_quarter
 from processors.compliance_calculator import calculate_compliance, load_vamc_reference
 from processors.pubtracker_crossref import find_latest_export, load_pubtracker_submissions, _normalize_title
 from processors.ord_portfolio import tag_publications
@@ -170,10 +170,12 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
             dim_raw_all = dim_raw
             dim_raw = dim_raw[ord_funded_mask].copy()
 
-            dim_pub_list, dim_date_info = process_dimensions(dim_raw)
+            # Split by each record's own publication date instead of one flat pool applied
+            # identically to every quarter, so quarter-over-quarter Dimensions counts differ.
+            dim_pub_list, dim_date_info = process_dimensions_by_quarter(dim_raw)
         except Exception as exc:
             errors.append(f'Dimensions processing error: {exc}')
-            dim_pub_list, dim_date_info = [], {}
+            dim_pub_list, dim_date_info = {}, {}
             dim_raw = pd.DataFrame()
             dim_raw_all = pd.DataFrame()
 
@@ -238,15 +240,22 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
         metric_cols[base + 1].metric(f'{label}\nDimensions', t[f'{label} Dimensions Count'])
         metric_cols[base + 2].metric(f'{label}\n% Entered', t[f'{label} % Entered'])
 
+    total_row = result_df[result_df['VAMC'] == 'TOTAL']
+    if not total_row.empty:
+        t = total_row.iloc[0]
+        fy_cols = st.columns(3)
+        fy_cols[0].metric('FY Total\nPubTracker', t['FY Total PubTracker Count'])
+        fy_cols[1].metric('FY Total\nDimensions', t['FY Total Dimensions Count'])
+        fy_cols[2].metric('FY Total\n% Entered', t['FY Total % Entered'])
+
     # ── PubTracker corroboration (title match against PubTracker Export) ─────
     pt_submissions = load_pubtracker_submissions()
     if not pt_submissions.empty and 'Publication ID' in dim_raw.columns and 'Title' in dim_raw.columns:
         pub_title_map = dict(zip(dim_raw['Publication ID'].astype(str), dim_raw['Title']))
         norm_titles = set(pt_submissions['_norm_title'])
         matched_ids = set()
-        if all_quarters:
-            for info in diagnostics.get(all_quarters[0], {}).values():
-                matched_ids.update(info['matched_pub_ids'])
+        for info in diagnostics.get('FY_TOTAL', {}).values():
+            matched_ids.update(info['matched_pub_ids'])
         matched_titles = [pub_title_map.get(pid) for pid in matched_ids if pub_title_map.get(pid)]
         corroborated = sum(1 for t in matched_titles if _normalize_title(t) in norm_titles)
         total_matched = len(matched_titles)
