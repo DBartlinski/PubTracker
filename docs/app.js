@@ -681,7 +681,9 @@ function rowsFromCompliancePayload(payload) {
 async function loadAutoCompliance() {
   let payload;
   try {
-    const resp = await fetch('./data/compliance.json');
+    // Cache-bust with a timestamp query param: GitHub Pages' CDN can otherwise keep serving a
+    // stale compliance.json (varies by full URL) after the underlying data file is rebuilt.
+    const resp = await fetch(`./data/compliance.json?v=${Date.now()}`, { cache: 'no-store' });
     if (!resp.ok) return false;
     payload = await resp.json();
   } catch (e) {
