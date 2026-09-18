@@ -20,6 +20,7 @@ from processors.pubtracker_crossref import load_pubtracker_submissions, find_lat
 from processors.pubtracker_processor import process_pubtracker, get_quarter_label
 from processors.dimensions_processor import process_dimensions
 from processors.compliance_calculator import calculate_compliance, load_vamc_reference
+from processors.ord_portfolio import tag_publications
 
 SOURCE_CSV = project_root / "output/dimensions_va_2025_2026/dimensions_va_2025_2026_filtered_2025-10-01_to_2026-09-30.csv"
 OUTPUT_DIR = project_root / "docs/data"
@@ -95,6 +96,20 @@ def build_compliance_payload() -> dict | None:
         return None
 
     dim_raw = pd.read_csv(SOURCE_CSV)
+    dim_raw = tag_publications(dim_raw)
+
+    pt_submissions = load_pubtracker_submissions(pt_path)
+    pubtracker_norm_titles = set(pt_submissions["_norm_title"]) if not pt_submissions.empty else set()
+
+    # Only count confirmed ORD-funded Dimensions records: funding-text evidence, OR a title
+    # match to a PubTracker submission (PubTracker submissions are ORD-funded by definition).
+    if "Title" in dim_raw.columns:
+        title_matched = dim_raw["Title"].map(_normalize_title).isin(pubtracker_norm_titles)
+    else:
+        title_matched = pd.Series(False, index=dim_raw.index)
+    ord_funded_mask = dim_raw["Has ORD Funding Evidence"].fillna(False) | title_matched
+    dim_raw = dim_raw[ord_funded_mask].copy()
+
     dim_pub_list, _ = process_dimensions(dim_raw)
 
     pt_raw = pd.read_excel(pt_path, sheet_name=0)
@@ -108,9 +123,6 @@ def build_compliance_payload() -> dict | None:
     pub_title_map = {}
     if "Publication ID" in dim_raw.columns and "Title" in dim_raw.columns:
         pub_title_map = dict(zip(dim_raw["Publication ID"].astype(str), dim_raw["Title"]))
-
-    pt_submissions = load_pubtracker_submissions(pt_path)
-    pubtracker_norm_titles = set(pt_submissions["_norm_title"]) if not pt_submissions.empty else set()
 
     # Dimensions matches are the same set across quarters (pre-filtered per SOP) - use the first.
     quarter_diag = diagnostics.get(all_quarters[0], {}) if all_quarters else {}

@@ -12,6 +12,7 @@ from processors.pubtracker_processor import process_pubtracker, get_quarter_labe
 from processors.dimensions_processor import read_dimensions_df, process_dimensions
 from processors.compliance_calculator import calculate_compliance, load_vamc_reference
 from processors.pubtracker_crossref import find_latest_export, load_pubtracker_submissions, _normalize_title
+from processors.ord_portfolio import tag_publications
 
 # Default auto-loaded sources (matches the dataset used by dashboard.py / the static site)
 DEFAULT_DIMENSIONS_PATH = os.path.join(
@@ -44,6 +45,8 @@ with st.sidebar:
         **Generate**  
         Click *Generate Compliance Report*. The app will:
         - Filter PubTracker to publications only
+        - Only count Dimensions publications with confirmed ORD funding (funding-text
+          evidence, or a title match to a PubTracker submission) — not all Dimensions records
         - Exclude Conference Abstracts & Correction Erratum from Dimensions
         - Auto-detect VA fiscal year quarters from dates
         - Count submissions per VAMC (PubTracker by station no., Dimensions by org name)
@@ -152,11 +155,27 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
                 dim_raw = read_dimensions_df(dimensions_file.read())
             else:
                 dim_raw = pd.read_csv(DEFAULT_DIMENSIONS_PATH)
+
+            # Only count confirmed ORD-funded Dimensions records: funding-text evidence,
+            # OR a title match to a PubTracker submission (PubTracker submissions are
+            # ORD-funded by definition, even if our text detector misses the evidence).
+            dim_raw = tag_publications(dim_raw)
+            pt_submissions_for_ord = load_pubtracker_submissions()
+            pt_norm_titles = set(pt_submissions_for_ord['_norm_title']) if not pt_submissions_for_ord.empty else set()
+            if 'Title' in dim_raw.columns:
+                title_matched = dim_raw['Title'].map(_normalize_title).isin(pt_norm_titles)
+            else:
+                title_matched = pd.Series(False, index=dim_raw.index)
+            ord_funded_mask = dim_raw['Has ORD Funding Evidence'].fillna(False) | title_matched
+            dim_raw_all = dim_raw
+            dim_raw = dim_raw[ord_funded_mask].copy()
+
             dim_pub_list, dim_date_info = process_dimensions(dim_raw)
         except Exception as exc:
             errors.append(f'Dimensions processing error: {exc}')
             dim_pub_list, dim_date_info = [], {}
             dim_raw = pd.DataFrame()
+            dim_raw_all = pd.DataFrame()
 
         # ── Compliance calculation ───────────────────────────────────────────
         if not errors:
@@ -198,9 +217,11 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
         mn = dim_date_info['min_date'].strftime('%b %d, %Y')
         mx = dim_date_info['max_date'].strftime('%b %d, %Y')
         st.info(
-            f"Dimensions file contains **{dim_date_info['count']}** publications "
+            f"**{dim_date_info['count']}** confirmed ORD-funded Dimensions publications "
+            f"(out of {len(dim_raw_all)} total Dimensions records loaded) "
             f"with publication dates ranging **{mn} – {mx}**. "
-            "Ensure this matches the quarter(s) above (pre-filter in Dimensions per SOP)."
+            "Ensure this matches the quarter(s) above (pre-filter in Dimensions per SOP). "
+            "\"Confirmed ORD-funded\" = funding-text evidence detected, or a title match to a PubTracker submission."
         )
 
     # ── Summary metrics ──────────────────────────────────────────────────────
@@ -305,5 +326,5 @@ if st.button('Generate Compliance Report', type='primary', width='stretch'):
         st.dataframe(pt_raw.head(50), use_container_width=True, hide_index=True)
 
     with st.expander('👁  Preview – Dimensions raw data'):
-        st.caption(f'{len(dim_raw)} total rows loaded (after header skip)')
+        st.caption(f'{len(dim_raw)} confirmed ORD-funded rows shown (out of {len(dim_raw_all)} total Dimensions records loaded)')
         st.dataframe(dim_raw.head(50), use_container_width=True, hide_index=True)
