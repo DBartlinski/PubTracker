@@ -49,14 +49,20 @@ st.markdown(
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap');
     html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
     h1, h2, h3 { font-family: 'IBM Plex Serif', serif; letter-spacing: 0; }
-    [data-testid="stAppViewContainer"] { background: linear-gradient(180deg, #f5f7f4 0, #ffffff 260px); }
-    [data-testid="stSidebar"] { background: #edf1ec; border-right: 1px solid #cdd6cf; }
+    /* Follows Streamlit's resolved theme (auto/light/dark) via its CSS variables, so this
+       adapts to the visitor's browser/OS color-scheme preference automatically. */
+    [data-testid="stAppViewContainer"] { background: var(--background-color); }
+    [data-testid="stSidebar"] {
+        background: var(--secondary-background-color);
+        border-right: 1px solid rgba(128, 128, 128, 0.3);
+    }
     [data-testid="stMetric"] {
-        background: #ffffff; border: 1px solid #d9dfda; border-top: 3px solid #236b56;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128, 128, 128, 0.3); border-top: 3px solid #2f9c7c;
         padding: 12px 14px; border-radius: 4px;
     }
-    .dashboard-kicker { color: #236b56; font-size: .78rem; font-weight: 600; text-transform: uppercase; }
-    .dashboard-note { color: #52605a; font-size: .92rem; margin-bottom: 1rem; }
+    .dashboard-kicker { color: #2f9c7c; font-size: .78rem; font-weight: 600; text-transform: uppercase; }
+    .dashboard-note { color: var(--text-color); opacity: .75; font-size: .92rem; margin-bottom: 1rem; }
     </style>
     """,
     unsafe_allow_html=True,
