@@ -21,6 +21,12 @@ ENV/
 .dimensions-browser-profile/
 output/dimensions_batches/
 output/dimensions_va_2025_2026/
+output/dimensions_2016_2019_all/
+output/dimensions_2020_2024_all/
+output/dimensions_exports/
+output/combined_dashboard/
+# output/combined_dashboard_public/ is intentionally NOT ignored - it's the trimmed
+# (~35MB) cache committed for sharing combined_dashboard.py on Streamlit Community Cloud.
 
 # Data files – keep sample CSVs in data/ but exclude raw uploads
 *.xlsx

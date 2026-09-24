@@ -1,0 +1,16 @@
+{
+  "public": true,
+  "source_batches": {
+    "2016-2019": "output/dimensions_2016_2019_all/dimensions_merged.csv",
+    "2020-2024": "output/dimensions_2020_2024_all/dimensions_merged.csv",
+    "FY24-FY25": "output/dimensions_exports/dimensions_va_fy24_fy25/dimensions_va_fy24_fy25_merged.csv"
+  },
+  "raw_row_counts": {
+    "2016-2019": 59950,
+    "2020-2024": 87082,
+    "FY24-FY25": 842
+  },
+  "unique_publications": 147332,
+  "facility_match_rows": 129609,
+  "source_columns": []
+}
