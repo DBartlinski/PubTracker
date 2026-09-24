@@ -21,9 +21,24 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from processors.dashboard_data import split_values
 
-# Set COMBINED_DASHBOARD_DATA_DIR to point at a trimmed --public cache (e.g. when deploying
-# to Streamlit Community Cloud). Defaults to the full local cache for local development.
-CACHE_DIR = Path(os.environ.get("COMBINED_DASHBOARD_DATA_DIR", "output/combined_dashboard"))
+# Set COMBINED_DASHBOARD_DATA_DIR to force a specific cache directory. Otherwise, prefer the
+# full local cache (output/combined_dashboard) and fall back to the trimmed public cache
+# (output/combined_dashboard_public) when the full one isn't present - e.g. on a Streamlit
+# Community Cloud deployment, where only the trimmed cache is committed to git.
+_DEFAULT_CACHE_DIRS = ["output/combined_dashboard", "output/combined_dashboard_public"]
+
+
+def _resolve_cache_dir() -> Path:
+    override = os.environ.get("COMBINED_DASHBOARD_DATA_DIR")
+    if override:
+        return Path(override)
+    for candidate in _DEFAULT_CACHE_DIRS:
+        if (Path(candidate) / "combined_publications.parquet").exists():
+            return Path(candidate)
+    return Path(_DEFAULT_CACHE_DIRS[0])
+
+
+CACHE_DIR = _resolve_cache_dir()
 PUBLICATIONS_PATH = CACHE_DIR / "combined_publications.parquet"
 MATCHES_PATH = CACHE_DIR / "combined_facility_matches.parquet"
 
@@ -512,8 +527,10 @@ def main() -> None:
 
     if not PUBLICATIONS_PATH.exists() or not MATCHES_PATH.exists():
         st.error(
-            "Combined dataset cache not found. Run `python build_combined_dashboard_data.py` from the "
-            "project root first, then reload this page."
+            f"Combined dataset cache not found at `{CACHE_DIR}`. Run `python build_combined_dashboard_data.py` "
+            "(add `--out-dir output/combined_dashboard_public --public` for a smaller committable cache) "
+            "from the project root, then reload this page. If deploying, either commit the trimmed public "
+            "cache or set the COMBINED_DASHBOARD_DATA_DIR environment variable to its location."
         )
         return
 
