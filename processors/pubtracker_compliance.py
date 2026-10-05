@@ -139,13 +139,13 @@ def match_to_pubtracker(
             [pub_titles[i] for i in pending],
             pt_titles,
             scorer=fuzz.ratio,
-            dtype=np.uint8,
-            score_cutoff=int(round(threshold)),
+            dtype=np.float32,
+            score_cutoff=threshold,
             workers=-1,
         )
         pt_facilities = pubtracker["_facilities"].tolist()
         for row, i in enumerate(pending):
-            candidates = np.flatnonzero(scores[row] >= int(round(threshold)))
+            candidates = np.flatnonzero(scores[row] >= threshold)
             if candidates.size == 0:
                 continue
             own = pub_facilities.get(pub_ids[i], frozenset())

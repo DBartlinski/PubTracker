@@ -205,7 +205,6 @@ function renderActiveTab() {
   else if (activeTab === 'facilities') renderFacilities();
   else if (activeTab === 'ord') renderOrdPortfolios();
   else if (activeTab === 'impact') renderImpact();
-  else if (activeTab === 'ptgap') renderPtGap();
 }
 
 function setupTabs() {
@@ -706,73 +705,6 @@ function renderImpact() {
 }
 
 // ============================================================
-// DIMENSIONS-PUBTRACKER COMPLIANCE (precomputed by build_static_dashboard_data.py)
-// ============================================================
-let ptGapData = null;       // payload from pubtracker_gap.json (null until loaded; false if unavailable)
-let ptGapSelected = null;   // facility row currently shown in the detail panel
-
-async function renderPtGap() {
-  const metricsEl = document.getElementById('ptgapMetrics');
-  if (ptGapData === null) {
-    metricsEl.innerHTML = '<div class="col-12 caption-note">Loading...</div>';
-    try {
-      const resp = await fetch('./data/pubtracker_gap.json');
-      ptGapData = resp.ok ? await resp.json() : false;
-    } catch (e) {
-      ptGapData = false;
-    }
-    const select = document.getElementById('ptgapPeriod');
-    if (ptGapData) {
-      select.innerHTML = Object.keys(ptGapData.periods).map(k => `<option>${escapeHtml(k)}</option>`).join('');
-      document.getElementById('ptgapThreshold').textContent = ptGapData.fuzzyThreshold;
-    }
-  }
-  if (!ptGapData) {
-    metricsEl.innerHTML = '<div class="col-12 caption-note">PubTracker comparison data is not available.</div>';
-    return;
-  }
-
-  const period = ptGapData.periods[document.getElementById('ptgapPeriod').value];
-  const rate = period.dimensionsCount ? (100 * period.found / period.dimensionsCount).toFixed(1) : '0.0';
-  const card = (label, value) => `<div class="col-6 col-md"><div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div></div></div>`;
-  metricsEl.innerHTML = [
-    card('Dimensions records', period.dimensionsCount.toLocaleString()),
-    card('Found in PubTracker', period.found.toLocaleString()),
-    card('Exact / fuzzy', `${period.exact.toLocaleString()} / ${period.fuzzy.toLocaleString()}`),
-    card('Missing from PubTracker', period.missing.toLocaleString()),
-    card('Overall submission rate', `${rate}%`),
-  ].join('');
-  document.getElementById('ptgapNote').textContent =
-    `PubTracker: ${period.pubtrackerCount.toLocaleString()} of ${ptGapData.pubtrackerRows.toLocaleString()} publication submissions have a publication date ` +
-    `(Date Created if blank) between ${period.start} and ${period.end}.`;
-
-  document.getElementById('ptgapBody').innerHTML = period.facilities.map((f, i) => `<tr data-idx="${i}" style="cursor:pointer">
-    <td>${escapeHtml(f.facility)}</td><td>${f.total}</td><td>${f.found}</td><td>${f.missing}</td><td>${f.rate.toFixed(1)}%</td>
-  </tr>`).join('');
-  document.querySelectorAll('#ptgapBody tr').forEach(tr => {
-    tr.addEventListener('click', () => showPtGapDetail(period.facilities[Number(tr.dataset.idx)]));
-  });
-  document.getElementById('ptgapDetail').classList.add('d-none');
-  ptGapSelected = null;
-}
-
-function showPtGapDetail(facility) {
-  ptGapSelected = facility;
-  const byId = new Map(publications.map(p => [p.id, p]));
-  const rows = facility.missingIds.map(id => byId.get(id)).filter(Boolean)
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  document.getElementById('ptgapDetailTitle').textContent =
-    `${facility.facility}: ${rows.length.toLocaleString()} Dimensions records not found in PubTracker`;
-  document.getElementById('ptgapDetailBody').innerHTML = rows.map(p => {
-    const links = [['DOI', p.doiLink], ['PubMed', p.pubmedLink], ['Dimensions', p.dimensionsLink]]
-      .filter(([, url]) => url).map(([name, url]) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${name}</a>`).join(' &middot; ');
-    return `<tr><td>${escapeHtml(p.title || '')}</td><td>${escapeHtml(p.date || '')}</td><td>${escapeHtml(p.journal || '')}</td><td>${links}</td></tr>`;
-  }).join('') || '<tr><td colspan="4" class="text-muted">No missing records.</td></tr>';
-  document.getElementById('ptgapDetail').classList.remove('d-none');
-  document.getElementById('ptgapDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// ============================================================
 // INIT
 // ============================================================
 async function init() {
@@ -803,9 +735,6 @@ async function init() {
     document.getElementById('btnDownloadFacilitiesCsv').addEventListener('click', () => exportTableToCsv('facilitiesBody', 'facility_attribution.csv'));
     document.getElementById('btnDownloadOrdFacilityCsv').addEventListener('click', () => exportTableToCsv('ordFacilityBody', 'ord_broad_portfolio_by_facility.csv'));
     document.getElementById('btnPrintPdf').addEventListener('click', () => window.print());
-    document.getElementById('ptgapPeriod').addEventListener('change', renderPtGap);
-    document.getElementById('btnDownloadPtgapCsv').addEventListener('click', () => exportTableToCsv('ptgapBody', 'dimensions_pubtracker_facility_rates.csv'));
-    document.getElementById('btnDownloadPtgapMissingCsv').addEventListener('click', () => exportTableToCsv('ptgapDetailBody', 'dimensions_missing_from_pubtracker.csv'));
     document.querySelectorAll('.chart-download-btn').forEach(btn => {
       btn.addEventListener('click', () => downloadChartImage(btn.dataset.canvas, btn.dataset.filename));
     });
