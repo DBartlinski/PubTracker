@@ -536,7 +536,8 @@ def render_pubtracker_compliance(dataset: DashboardDataset) -> None:
     metric_columns[3].metric("Missing from PubTracker", f"{int((~found).sum()):,}")
     metric_columns[4].metric("Overall submission rate", f"{found.mean() * 100:.1f}%")
     st.caption(
-        f"{stats['source_records']:,} source records: excluded {stats['excluded_document_type']:,} non-scientific document types, "
+        f"{stats['source_records']:,} source records: excluded {stats['excluded_document_type']:,} conference abstracts/corrections, "
+        f"{stats['excluded_publication_type']:,} preprints, chapters, proceedings or books, "
         f"{stats['excluded_undated_or_year_only']:,} with no exact date, {stats['excluded_out_of_range']:,} outside Oct 1, 2025 - Sep 30, 2026. "
         f"PubTracker: {len(pubtracker):,} of {len(pubtracker_all):,} publication submissions have a publication date "
         f"(Date Created if blank) in {start:%Y-%m-%d} to {end:%Y-%m-%d}. A record with several facilities counts toward each."

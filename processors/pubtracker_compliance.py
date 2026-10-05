@@ -20,6 +20,8 @@ from processors.pubtracker_processor import get_quarter_date_range, get_quarter_
 FY26_START = pd.Timestamp("2025-10-01")
 FY26_END = pd.Timestamp("2026-09-30")
 UNATTRIBUTED = "Unattributed (no VAMC match)"
+# Dimensions `Publication Type` values that are not published journal items; unknown values are kept.
+NON_PUBLICATION_TYPES = {"preprint", "chapter", "proceeding", "book", "monograph", "edited book", "seminar"}
 
 PUBTRACKER_COLUMNS = ["Record ID", "Title", "Date Created", "POC Medical Center", "POC Medical Center Number"]
 
@@ -87,13 +89,20 @@ def filter_fiscal_year(
     start: pd.Timestamp = FY26_START,
     end: pd.Timestamp = FY26_END,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
-    """Keep SOP-eligible records dated within [start, end]; year-only dates cannot be placed."""
-    eligible = publications["SOP Eligible"].astype(bool)
+    """Keep published-item records dated within [start, end]; year-only dates cannot be placed."""
+    sop_eligible = publications["SOP Eligible"].astype(bool)
+    if "Publication Type" in publications.columns:
+        publication_type = publications["Publication Type"].fillna("").astype(str).str.strip().str.lower()
+        is_publication = ~publication_type.isin(NON_PUBLICATION_TYPES)
+    else:
+        is_publication = pd.Series(True, index=publications.index)
+    eligible = sop_eligible & is_publication
     dated = publications["Canonical Date"].notna() & publications["Date Precision"].ne("year")
     in_range = publications["Canonical Date"].between(start, end)
     stats = {
         "source_records": len(publications),
-        "excluded_document_type": int((~eligible).sum()),
+        "excluded_document_type": int((~sop_eligible).sum()),
+        "excluded_publication_type": int((sop_eligible & ~is_publication).sum()),
         "excluded_undated_or_year_only": int((eligible & ~dated).sum()),
         "excluded_out_of_range": int((eligible & dated & ~in_range).sum()),
     }

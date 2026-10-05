@@ -39,6 +39,16 @@ class ComplianceTests(unittest.TestCase):
         self.assertEqual(stats["excluded_undated_or_year_only"], 1)
         self.assertEqual(stats["excluded_out_of_range"], 2)
 
+    def test_non_publication_types_are_excluded(self):
+        rows = [
+            {"Publication ID": pid, "Canonical Date": "2026-02-01", "Date Precision": "day",
+             "SOP Eligible": True, "Publication Type": kind}
+            for pid, kind in [("a", "Article"), ("b", "Preprint"), ("c", "Chapter"), ("d", "Proceeding"), ("e", None)]
+        ]
+        scoped, stats = filter_fiscal_year(pubs(rows))
+        self.assertEqual(sorted(scoped["Publication ID"]), ["a", "e"])
+        self.assertEqual(stats["excluded_publication_type"], 3)
+
     def test_exact_fuzzy_and_facility_gate(self):
         dimensions = pd.DataFrame([
             {"Publication ID": "p1", "Title": "Opioid Use among Veterans: a cohort study"},
