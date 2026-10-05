@@ -96,8 +96,8 @@
             book chapters, proceedings and books are left out, as are records with only a
             publication year and no exact date. Each record is placed in a fiscal quarter by its publication date.</li>
           <li><strong>PubTracker:</strong> submissions of type <em>publication</em> from the 2025 and 2026 PubTracker exports
-            (pulled Oct 5, 2026). Each is dated by its Publication Date, or its Date Created when that is blank, and is compared
-            only with Dimensions records from the same period you select.</li>
+            (pulled Oct 5, 2026). PubTracker's own dates are not used, because many submissions have no publication date:
+            every submission is compared with the Dimensions records, and the Dimensions publication date decides the period.</li>
           <li><strong>Facility:</strong> a Dimensions record is assigned to a facility from the organization names in its
             affiliations. A PubTracker submission is assigned from its point-of-contact station number.</li>
         </ul>
@@ -125,8 +125,8 @@
           <li>A publication with several facilities counts toward each one, so facility rows add up to more than the overall total.</li>
           <li><em>Unattributed</em> holds records whose affiliations did not map to a known facility. They count in the overall
             total but belong to no facility.</li>
-          <li><strong>Period:</strong> choose the whole year or one quarter. Records are tied to a period by publication date, so a
-            PubTracker entry whose date falls in a different quarter than its Dimensions record can show as missing in a quarter view.</li>
+          <li><strong>Period:</strong> choose the whole year or one quarter. A Dimensions record belongs to the period of its
+            publication date, and it counts as found if any PubTracker submission matches it, whenever that was submitted or dated.</li>
         </ul>
 
         <p class="mb-0 text-muted"><strong>Keep in mind:</strong> Dimensions lists all VA-affiliated publications, not only those

@@ -27,7 +27,6 @@ from processors.pubtracker_compliance import (
     build_station_lookup,
     facility_map,
     filter_fiscal_year,
-    filter_pubtracker_period,
     load_pubtracker_files,
     match_to_pubtracker,
     quarter_options,
@@ -198,34 +197,25 @@ def build_compliance_payload() -> dict | None:
 def build_pubtracker_gap_payload(publications: pd.DataFrame, facility_matches: pd.DataFrame) -> dict | None:
     """Dimensions FY26 records with their best PubTracker title-match score, for the static slider.
 
-    Each record carries the best facility-compatible match score (0 below the minimum threshold,
-    100 = exact) for the whole-year and own-quarter views, so the page can apply any threshold.
+    Each record carries its best facility-compatible match score against ALL PubTracker rows (0 below
+    the minimum threshold, 100 = exact), so the page can apply any threshold. PubTracker's own date is
+    not used: the Dimensions publication date decides which period a record belongs to.
     Only Dimensions data and scores are written (no PubTracker titles or submitter data), since
     this is published to the public GitHub Pages site.
     """
     if not all(path.exists() for path in PUBTRACKER_GAP_PATHS):
         return None
 
-    pubtracker_all = load_pubtracker_files(PUBTRACKER_GAP_PATHS, build_station_lookup())
+    pubtracker = load_pubtracker_files(PUBTRACKER_GAP_PATHS, build_station_lookup())
     scoped, _ = filter_fiscal_year(publications)
     pub_facilities = facility_map(facility_matches)
 
-    options = quarter_options(scoped)
-    whole_label = next(iter(options))
-    periods = {}
-    fy_scores: dict[str, int] = {}
-    quarter_scores: dict[str, int] = {}
-    for label, (start, end) in options.items():
-        in_period = scoped[scoped["Canonical Date"].between(start, end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))]
-        pubtracker = filter_pubtracker_period(pubtracker_all, start, end)
-        results = match_to_pubtracker(in_period, pub_facilities, pubtracker, GAP_MIN_THRESHOLD)
-        scores = dict(zip(results["Publication ID"], (results["Match Score"] * 10).apply(math.floor) / 10))
-        (fy_scores if label == whole_label else quarter_scores).update(scores)
-        periods[label] = {
-            "start": start.strftime("%Y-%m-%d"),
-            "end": end.strftime("%Y-%m-%d"),
-            "pubtrackerCount": len(pubtracker),
-        }
+    results = match_to_pubtracker(scoped, pub_facilities, pubtracker, GAP_MIN_THRESHOLD)
+    scores = dict(zip(results["Publication ID"], (results["Match Score"] * 10).apply(math.floor) / 10))
+    periods = {
+        label: {"start": start.strftime("%Y-%m-%d"), "end": end.strftime("%Y-%m-%d")}
+        for label, (start, end) in quarter_options(scoped).items()
+    }
 
     facility_names = sorted({name for names in pub_facilities.values() for name in names})
     facility_index = {name: i for i, name in enumerate(facility_names)}
@@ -244,18 +234,16 @@ def build_pubtracker_gap_payload(publications: pd.DataFrame, facility_matches: p
             doi,
             pmid,
             sorted(facility_index[name] for name in pub_facilities.get(pub_id, ())),
-            fy_scores.get(pub_id, 0),
-            quarter_scores.get(pub_id, 0),
+            scores.get(pub_id, 0),
         ])
     return {
         "minThreshold": GAP_MIN_THRESHOLD,
         "defaultThreshold": 90,
-        "pubtrackerRows": len(pubtracker_all),
+        "pubtrackerRows": len(pubtracker),
         "unattributedLabel": UNATTRIBUTED,
-        "wholeYear": whole_label,
         "periods": periods,
         "facilities": facility_names,
-        # [id, date, title, journal, doi, pmid, facilityIdx[], bestScoreWholeYear, bestScoreOwnQuarter]
+        # [id, date, title, journal, doi, pmid, facilityIdx[], bestMatchScore]
         "records": records,
     }
 

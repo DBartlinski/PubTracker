@@ -66,12 +66,6 @@ def load_pubtracker_files(paths: list[str | Path], station_lookup: dict[str, set
     return raw[PUBTRACKER_COLUMNS + ["PubTracker Date", "PubTracker Date Source", "_norm_title", "_facilities"]]
 
 
-def filter_pubtracker_period(pubtracker: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
-    """Keep PubTracker rows whose PubTracker Date falls within [start, end] (inclusive of the end day)."""
-    dates = pubtracker["PubTracker Date"]
-    return pubtracker[dates.between(start, end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))].reset_index(drop=True)
-
-
 def quarter_options(publications: pd.DataFrame, fiscal_year: int = 26) -> dict[str, tuple[pd.Timestamp, pd.Timestamp]]:
     """Selectable periods (whole year plus each FY quarter present in the Dimensions data)."""
     options = {f"Whole FY{fiscal_year}": (FY26_START, FY26_END)}

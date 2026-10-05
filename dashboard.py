@@ -16,7 +16,6 @@ from processors.pubtracker_compliance import (
     facility_map,
     facility_rates,
     filter_fiscal_year,
-    filter_pubtracker_period,
     load_pubtracker_files,
     match_to_pubtracker,
     quarter_options,
@@ -506,14 +505,13 @@ def render_pubtracker_compliance(dataset: DashboardDataset) -> None:
         return
 
     pt_mtimes = tuple(path.stat().st_mtime for path in PUBTRACKER_PATHS)
-    pubtracker_all = cached_pubtracker(tuple(str(path) for path in PUBTRACKER_PATHS), pt_mtimes)
+    pubtracker = cached_pubtracker(tuple(str(path) for path in PUBTRACKER_PATHS), pt_mtimes)
     scoped, stats = filter_fiscal_year(dataset.publications)
 
     options = quarter_options(scoped)
     period = st.radio("Period", list(options), horizontal=True, key="compliance_period")
     start, end = options[period]
     scoped = scoped[scoped["Canonical Date"].between(start, end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))].copy()
-    pubtracker = filter_pubtracker_period(pubtracker_all, start, end)
 
     threshold = st.slider(
         "Fuzzy title match threshold (%)", min_value=70, max_value=100, value=90, step=1,
@@ -539,8 +537,9 @@ def render_pubtracker_compliance(dataset: DashboardDataset) -> None:
         f"{stats['source_records']:,} source records: excluded {stats['excluded_document_type']:,} conference abstracts/corrections, "
         f"{stats['excluded_publication_type']:,} preprints, chapters, proceedings or books, "
         f"{stats['excluded_undated_or_year_only']:,} with no exact date, {stats['excluded_out_of_range']:,} outside Oct 1, 2025 - Sep 30, 2026. "
-        f"PubTracker: {len(pubtracker):,} of {len(pubtracker_all):,} publication submissions have a publication date "
-        f"(Date Created if blank) in {start:%Y-%m-%d} to {end:%Y-%m-%d}. A record with several facilities counts toward each."
+        f"All {len(pubtracker):,} PubTracker publication submissions are compared with the Dimensions records dated "
+        f"{start:%Y-%m-%d} to {end:%Y-%m-%d}; the Dimensions publication date decides the period, so PubTracker's own "
+        "date is not used. A record with several facilities counts toward each."
     )
 
     rates = facility_rates(results, pub_facilities)

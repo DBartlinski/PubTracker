@@ -4,7 +4,7 @@
 // (built by build_static_dashboard_data.py): Dimensions FY26 records with their best PubTracker
 // title-match score, so any slider threshold can be applied here without PubTracker titles.
 (function () {
-  const REC = { ID: 0, DATE: 1, TITLE: 2, JOURNAL: 3, DOI: 4, PMID: 5, FACS: 6, FY_SCORE: 7, Q_SCORE: 8 };
+  const REC = { ID: 0, DATE: 1, TITLE: 2, JOURNAL: 3, DOI: 4, PMID: 5, FACS: 6, SCORE: 7 };
   let payload = null;
   let facilityRows = [];
   let selectedFacility = null;
@@ -28,18 +28,17 @@
     const label = $('ptgapPeriod').value;
     const period = payload.periods[label];
     const threshold = Number($('ptgapThreshold').value);
-    const scoreIndex = label === payload.wholeYear ? REC.FY_SCORE : REC.Q_SCORE;
     const records = payload.records.filter(r => r[REC.DATE] >= period.start && r[REC.DATE] <= period.end);
-    const isFound = r => r[scoreIndex] >= threshold;
-    return { label, period, threshold, records, isFound, scoreIndex };
+    const isFound = r => r[REC.SCORE] >= threshold;
+    return { label, period, threshold, records, isFound };
   }
 
   function render() {
-    const { period, threshold, records, isFound, scoreIndex } = currentView();
+    const { period, threshold, records, isFound } = currentView();
     $('ptgapThresholdValue').textContent = `${threshold}%`;
 
     const found = records.filter(isFound);
-    const exact = found.filter(r => r[scoreIndex] === 100).length;
+    const exact = found.filter(r => r[REC.SCORE] === 100).length;
     const rate = records.length ? (100 * found.length / records.length).toFixed(1) : '0.0';
     const card = (label, value) => `<div class="col-6 col-md"><div class="card text-center h-100"><div class="card-body py-2">
       <div class="small text-muted">${label}</div><div class="fs-4 fw-semibold">${value}</div></div></div></div>`;
@@ -51,8 +50,8 @@
       card('Overall submission rate', `${rate}%`),
     ].join('');
     $('ptgapNote').textContent =
-      `PubTracker: ${period.pubtrackerCount.toLocaleString()} of ${payload.pubtrackerRows.toLocaleString()} publication submissions ` +
-      `have a publication date (Date Created if blank) between ${period.start} and ${period.end}.`;
+      `All ${payload.pubtrackerRows.toLocaleString()} PubTracker publication submissions are compared with the Dimensions records ` +
+      `dated ${period.start} to ${period.end}. The Dimensions publication date decides the period.`;
 
     const stats = new Map();
     records.forEach(r => {
