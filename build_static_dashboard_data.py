@@ -21,7 +21,23 @@ from processors.pubtracker_processor import process_pubtracker, get_quarter_labe
 from processors.dimensions_processor import process_dimensions_by_quarter
 from processors.compliance_calculator import calculate_compliance, load_vamc_reference
 from processors.ord_portfolio import tag_publications
+from processors.pubtracker_compliance import (
+    UNATTRIBUTED,
+    build_station_lookup,
+    facility_map,
+    facility_rates,
+    filter_fiscal_year,
+    filter_pubtracker_period,
+    load_pubtracker_files,
+    match_to_pubtracker,
+    quarter_options,
+)
 
+PUBTRACKER_GAP_PATHS = [
+    project_root / "PubTracker Export/submissionlist20261005132200-2025.xlsx",
+    project_root / "PubTracker Export/submissionlist20261005132200-2026.xlsx",
+]
+GAP_FUZZY_THRESHOLD = 90.0
 SOURCE_CSV = project_root / "output/dimensions_va_2025_2026/dimensions_va_2025_2026_filtered_2025-10-01_to_2026-09-30.csv"
 OUTPUT_DIR = project_root / "docs/data"
 
@@ -179,6 +195,62 @@ def build_compliance_payload() -> dict | None:
     }
 
 
+def build_pubtracker_gap_payload(publications: pd.DataFrame, facility_matches: pd.DataFrame) -> dict | None:
+    """Dimensions records missing from PubTracker, per FY period and facility.
+
+    Only Dimensions publication IDs and aggregate counts are written (no PubTracker titles or
+    submitter data), since this is published to the public GitHub Pages site. The fuzzy
+    threshold is fixed at build time because the static page has no PubTracker titles to match.
+    """
+    if not all(path.exists() for path in PUBTRACKER_GAP_PATHS):
+        return None
+
+    pubtracker_all = load_pubtracker_files(PUBTRACKER_GAP_PATHS, build_station_lookup())
+    scoped, _ = filter_fiscal_year(publications)
+    pub_facilities = facility_map(facility_matches)
+
+    periods = {}
+    for label, (start, end) in quarter_options(scoped).items():
+        in_period = scoped[scoped["Canonical Date"].between(start, end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))]
+        pubtracker = filter_pubtracker_period(pubtracker_all, start, end)
+        results = match_to_pubtracker(in_period, pub_facilities, pubtracker, GAP_FUZZY_THRESHOLD)
+        missing_ids = results.loc[results["Match Type"] == "Missing", "Publication ID"].tolist()
+
+        missing_by_facility: dict[str, list[str]] = {}
+        for pub_id in missing_ids:
+            for facility in pub_facilities.get(pub_id) or (UNATTRIBUTED,):
+                missing_by_facility.setdefault(facility, []).append(pub_id)
+
+        rates = facility_rates(results, pub_facilities)
+        found_total = int(results["Match Type"].ne("Missing").sum())
+        periods[label] = {
+            "start": start.strftime("%Y-%m-%d"),
+            "end": end.strftime("%Y-%m-%d"),
+            "dimensionsCount": len(results),
+            "pubtrackerCount": len(pubtracker),
+            "found": found_total,
+            "exact": int(results["Match Type"].eq("Matched (exact)").sum()),
+            "fuzzy": int(results["Match Type"].eq("Matched (fuzzy)").sum()),
+            "missing": len(missing_ids),
+            "facilities": [
+                {
+                    "facility": row["Facility"],
+                    "total": int(row["Dimensions Records"]),
+                    "found": int(row["In PubTracker"]),
+                    "missing": int(row["Missing"]),
+                    "rate": float(row["Submission Rate %"]),
+                    "missingIds": missing_by_facility.get(row["Facility"], []),
+                }
+                for _, row in rates.iterrows()
+            ],
+        }
+    return {
+        "fuzzyThreshold": GAP_FUZZY_THRESHOLD,
+        "pubtrackerRows": len(pubtracker_all),
+        "periods": periods,
+    }
+
+
 def main() -> None:
     print(f"Loading dashboard dataset from {SOURCE_CSV.name} ...")
     dataset = load_dashboard_dataset(str(SOURCE_CSV))
@@ -226,6 +298,15 @@ def main() -> None:
     else:
         compliance_path.write_text(json.dumps(compliance_payload, separators=(",", ":")), encoding="utf-8")
         print(f"Wrote {compliance_path} ({compliance_path.stat().st_size / 1024:.1f} KB, {len(compliance_payload['vamcs']):,} VAMCs)")
+
+    gap_payload = build_pubtracker_gap_payload(dataset.publications, dataset.facility_matches)
+    gap_path = OUTPUT_DIR / "pubtracker_gap.json"
+    if gap_payload is None:
+        gap_path.write_text("null", encoding="utf-8")
+        print("PubTracker exports for the gap report not found - wrote empty pubtracker_gap.json")
+    else:
+        gap_path.write_text(json.dumps(gap_payload, separators=(",", ":")), encoding="utf-8")
+        print(f"Wrote {gap_path} ({gap_path.stat().st_size / 1_048_576:.2f} MB, {len(gap_payload['periods'])} periods)")
 
 
 if __name__ == "__main__":

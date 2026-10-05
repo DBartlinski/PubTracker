@@ -146,6 +146,7 @@
       <li class="nav-item"><button class="nav-link" data-tab="facilities">Facilities</button></li>
       <li class="nav-item"><button class="nav-link" data-tab="ord">ORD Portfolios</button></li>
       <li class="nav-item"><button class="nav-link" data-tab="impact">Research Impact</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="ptgap">Dimensions-PubTracker Complience Oct 2026</button></li>
       <li class="nav-item ms-auto"><a href="./index.html" class="btn btn-sm btn-primary">Compliance Report →</a></li>
       <li class="nav-item"><button id="btnPrintPdf" class="btn btn-sm btn-outline-secondary">Print / Save as PDF</button></li>
     </ul>
@@ -379,6 +380,46 @@
       <div class="row g-3">
         <div class="col-md-6"><div class="section-card"><div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">Top journals</h6><button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartJournals" data-filename="top_journals">Download PNG</button></div><p class="caption-note">The 15 journals publishing the most filtered records — a measure of where VA-affiliated research appears, not of journal quality.</p><div class="chart-wrap"><canvas id="chartJournals"></canvas></div></div></div>
         <div class="col-md-6"><div class="section-card"><div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">Citation distribution</h6><button class="btn btn-sm btn-outline-secondary chart-download-btn" data-canvas="chartCitations" data-filename="citation_distribution">Download PNG</button></div><p class="caption-note">How many publications fall into each citation-count bucket. Citation counts are capped for display at 100+; newer publications will naturally cluster at the low end regardless of eventual impact.</p><div class="chart-wrap"><canvas id="chartCitations"></canvas></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-ptgap" class="tab-pane d-none">
+      <div class="section-card">
+        <h5 class="mb-1">Dimensions-PubTracker Complience Oct 2026</h5>
+        <p class="caption-note mb-2">
+          Dimensions is treated as the true source; PubTracker is the user-submitted supplement being audited.
+          Records are matched by title (exact, then fuzzy at a fixed <span id="ptgapThreshold">90</span>% similarity with facility agreement),
+          so treat results as evidence for review. Records are placed in a period by publication date. A record with several
+          facilities counts toward each. This view ignores the filters above.
+        </p>
+        <label class="form-label small mb-1" for="ptgapPeriod">Period</label>
+        <select id="ptgapPeriod" class="form-select form-select-sm w-auto"></select>
+      </div>
+      <div class="row g-3 mb-3" id="ptgapMetrics"></div>
+      <div class="caption-note mb-2" id="ptgapNote"></div>
+      <div class="section-card">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Submission rate by facility <span class="caption-note">(click a row to list its missing records)</span></h6>
+          <button class="btn btn-sm btn-outline-secondary" id="btnDownloadPtgapCsv">Download CSV</button>
+        </div>
+        <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+          <table class="table table-sm table-hover">
+            <thead><tr><th>Facility</th><th>Dimensions records</th><th>In PubTracker</th><th>Missing</th><th>Submission rate</th></tr></thead>
+            <tbody id="ptgapBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section-card mt-3 d-none" id="ptgapDetail">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0" id="ptgapDetailTitle"></h6>
+          <button class="btn btn-sm btn-outline-secondary" id="btnDownloadPtgapMissingCsv">Download CSV</button>
+        </div>
+        <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+          <table class="table table-sm">
+            <thead><tr><th>Title</th><th>Date</th><th>Journal</th><th>Links</th></tr></thead>
+            <tbody id="ptgapDetailBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
