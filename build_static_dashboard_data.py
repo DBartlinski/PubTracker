@@ -248,6 +248,60 @@ def build_pubtracker_gap_payload(publications: pd.DataFrame, facility_matches: p
     }
 
 
+def _text(value) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def build_not_in_pubtracker_payload(publications: pd.DataFrame, facility_matches: pd.DataFrame) -> dict | None:
+    """Build 02 data: eligible FY26 Dimensions records, found/not found at the fixed 90% threshold, with funding codes.
+
+    Public output, so only Dimensions fields and a found flag are written (no PubTracker titles, dates or IDs).
+    """
+    if not all(path.exists() for path in PUBTRACKER_GAP_PATHS):
+        return None
+
+    pubtracker = load_pubtracker_files(PUBTRACKER_GAP_PATHS, build_station_lookup())
+    scoped, _ = filter_fiscal_year(publications)
+    pub_facilities = facility_map(facility_matches)
+    results = match_to_pubtracker(scoped, pub_facilities, pubtracker, 90.0)
+    found = dict(zip(results["Publication ID"], results["Match Type"].ne("Missing")))
+
+    facility_names = sorted({name for names in pub_facilities.values() for name in names})
+    facility_index = {name: i for i, name in enumerate(facility_names)}
+    records = []
+    for row in scoped.sort_values("Canonical Date", ascending=False).to_dict("records"):
+        pub_id = row["Publication ID"]
+        records.append([
+            pub_id,
+            row["Canonical Date"].strftime("%Y-%m-%d"),
+            _text(row.get("Fiscal Period")),
+            _text(row.get("Title")),
+            _text(row.get("Source title")),
+            _text(row.get("DOI Link")).removeprefix("https://doi.org/"),
+            _text(row.get("PubMed Link")).removeprefix("https://pubmed.ncbi.nlm.nih.gov/").strip("/"),
+            sorted(facility_index[name] for name in pub_facilities.get(pub_id, ())),
+            int(bool(found.get(pub_id))),
+            int(bool(row.get("Has ORD Funding Evidence"))),
+            _text(row.get("ORD Broad Portfolio Codes")),
+            _text(row.get("ORD Broad Portfolios")),
+            _text(row.get("Funder")),
+            _text(row.get("Supporting Grants")),
+        ])
+    periods = {
+        label: {"start": start.strftime("%Y-%m-%d"), "end": end.strftime("%Y-%m-%d")}
+        for label, (start, end) in quarter_options(scoped).items()
+    }
+    return {
+        "threshold": 90,
+        "unattributedLabel": UNATTRIBUTED,
+        "periods": periods,
+        "facilities": facility_names,
+        # [id, date, fiscalPeriod, title, journal, doi, pmid, facilityIdx[], inPubTracker, ordFunded,
+        #  vaGrantCodes, ordPortfolio, funders, grantNumbers]
+        "records": records,
+    }
+
+
 def main() -> None:
     print(f"Loading dashboard dataset from {SOURCE_CSV.name} ...")
     dataset = load_dashboard_dataset(str(SOURCE_CSV))
@@ -304,6 +358,13 @@ def main() -> None:
     else:
         gap_path.write_text(json.dumps(gap_payload, separators=(",", ":")), encoding="utf-8")
         print(f"Wrote {gap_path} ({gap_path.stat().st_size / 1_048_576:.2f} MB, {len(gap_payload['periods'])} periods)")
+
+    build02_payload = build_not_in_pubtracker_payload(dataset.publications, dataset.facility_matches)
+    build02_path = OUTPUT_DIR / "not_in_pubtracker.json"
+    build02_path.write_text(
+        json.dumps(build02_payload, separators=(",", ":")) if build02_payload else "null", encoding="utf-8"
+    )
+    print(f"Wrote {build02_path} ({build02_path.stat().st_size / 1_048_576:.2f} MB)")
 
 
 if __name__ == "__main__":

@@ -76,6 +76,84 @@
 
 <div class="container-fluid px-4">
 
+  <!-- ── Build 02: Dimensions publications not in PubTracker ── -->
+  <div class="mt-3 mb-4" id="b02Section">
+    <h2 class="h4 mb-2">Dimensions publications not in PubTracker (Build 02)</h2>
+    <div class="alert alert-info small mb-3">
+      Journal publications in VA Dimensions with an exact publication date in the chosen period, checked against PubTracker by title.
+      <strong>Compliance %</strong> = publications entered in PubTracker ÷ Dimensions publications. All dates and quarters come from
+      Dimensions; PubTracker's submission and publication dates are not used. A publication linked to several facilities counts
+      toward each facility.
+    </div>
+    <div class="row g-3 align-items-end mb-3">
+      <div class="col-auto">
+        <label class="form-label small mb-1" for="b02Period">Period</label>
+        <select id="b02Period" class="form-select form-select-sm"></select>
+      </div>
+    </div>
+    <div class="row g-2 mb-3" id="b02Metrics"></div>
+
+    <div class="border rounded bg-white p-2 mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <strong>Compliance by facility</strong>
+        <span class="small text-muted">Click facilities to drill into their publications below (click again to deselect)</span>
+        <button class="btn btn-sm btn-outline-primary" id="b02DownloadFacilities">⬇ Download CSV</button>
+      </div>
+      <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Facility</th><th>Not in PubTracker</th><th>Entered in PubTracker</th><th>Dimensions publications</th><th style="min-width:160px">Compliance %</th></tr></thead>
+          <tbody id="b02FacilityBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="border rounded bg-white p-2 mb-3">
+      <strong>Publication drill-down</strong>
+      <div class="small text-muted mb-2">
+        Each row is one publication at one facility. Funding columns come from Dimensions: <em>VA grant codes</em> and
+        <em>ORD portfolio</em> are VA award prefixes (CX, BX, RX, HX, etc.) found in the funding text; <em>Funders</em> and
+        <em>Grant numbers</em> are what Dimensions lists. Blank means Dimensions has none. Click a row for details.
+      </div>
+      <div class="row g-2 align-items-end mb-2">
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Selected facilities</label>
+          <div id="b02SelectedFacilities" class="small"></div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1" for="b02Funding">Funding</label>
+          <select id="b02Funding" class="form-select form-select-sm">
+            <option value="all">All</option>
+            <option value="ord">ORD-funded (VA grant evidence)</option>
+            <option value="grant">Any grant listed</option>
+            <option value="none">No funding listed</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1" for="b02Portfolio">ORD portfolio</label>
+          <select id="b02Portfolio" class="form-select form-select-sm"><option value="">All</option></select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small mb-1" for="b02Search">Search</label>
+          <input id="b02Search" class="form-control form-control-sm" placeholder="Title, journal, funder, grant">
+        </div>
+        <div class="col-md-2 text-end">
+          <button class="btn btn-sm btn-outline-primary" id="b02DownloadList">⬇ Download list</button>
+        </div>
+      </div>
+      <ul class="nav nav-tabs mb-2" id="b02ViewTabs">
+        <li class="nav-item"><button class="nav-link active" data-view="missing" id="b02TabMissing">Not in PubTracker</button></li>
+        <li class="nav-item"><button class="nav-link" data-view="entered" id="b02TabEntered">In PubTracker</button></li>
+      </ul>
+      <div class="small text-muted mb-1" id="b02ListNote"></div>
+      <div class="table-responsive" style="max-height: 560px; overflow-y: auto;">
+        <table class="table table-sm table-hover mb-0" style="font-size:0.82rem">
+          <thead><tr><th>Dimensions date</th><th>Facility</th><th>Title</th><th>Journal</th><th>ORD funded</th><th>VA grant codes</th><th>Funders</th><th>Grant numbers</th><th>Links</th></tr></thead>
+          <tbody id="b02ListBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Dimensions-PubTracker compliance (precomputed, slider-adjustable) ── -->
   <div class="mt-3 mb-4" id="ptgapSection">
     <h2 class="h4 mb-2">Dimensions-PubTracker Complience Oct 2026</h2>
@@ -294,5 +372,6 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="app.js?v=20261005"></script>
 <script src="ptgap.js?v=20261005"></script>
+<script src="build02.js?v=20261007"></script>
 </body>
 </html>
