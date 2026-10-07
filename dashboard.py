@@ -13,12 +13,17 @@ from processors.dashboard_data import DashboardDataset, load_dashboard_dataset, 
 from processors.pubtracker_compliance import (
     UNATTRIBUTED,
     build_station_lookup,
+    classify_pubtracker_rows,
+    exclusion_reasons,
     facility_map,
     facility_rates,
     filter_fiscal_year,
     load_pubtracker_files,
+    match_pubtracker_to_dimensions,
     match_to_pubtracker,
+    matched_records_table,
     quarter_options,
+    quarter_rates,
 )
 
 
@@ -28,6 +33,8 @@ PUBTRACKER_PATHS = [
     Path("PubTracker Export/submissionlist20261005132200-2026.xlsx"),
 ]
 COMPLIANCE_TAB_TITLE = "Dimensions-PubTracker Complience Oct 2026"
+DIM_TO_PT_TAB_TITLE = "Dimensions to PubTracker"
+NOT_IN_PUBTRACKER = "Not in PubTracker"
 ORD_NO_SIGNAL_LABEL = "No ORD signal detected"
 DERIVED_EXPORT_COLUMNS = [
     "Canonical Date", "Date Source", "Date Precision", "Calendar Year",
@@ -583,6 +590,168 @@ def render_pubtracker_compliance(dataset: DashboardDataset) -> None:
         st.dataframe(fuzzy.sort_values("Match Score"), use_container_width=True, hide_index=True, height=360)
 
 
+@st.cache_data(show_spinner="Checking every PubTracker record against Dimensions...")
+def cached_reverse_match(threshold: float, cache_key: str, _pubtracker, _publications, _pub_facilities) -> pd.DataFrame:
+    del cache_key
+    return match_pubtracker_to_dimensions(_pubtracker, _publications, _pub_facilities, threshold)
+
+
+def _format_dates(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    frame = frame.copy()
+    for column in columns:
+        frame[column] = pd.to_datetime(frame[column]).dt.strftime("%Y-%m-%d").fillna("")
+    return frame
+
+
+def _csv(frame: pd.DataFrame) -> bytes:
+    return frame.to_csv(index=False).encode("utf-8-sig")
+
+
+def render_dimensions_to_pubtracker(dataset: DashboardDataset) -> None:
+    st.subheader(DIM_TO_PT_TAB_TITLE)
+    st.caption(
+        "Starts from every eligible Dimensions record (the authoritative source) and checks whether it also "
+        "appears in PubTracker. For matched records the Dimensions date is the published date and decides the "
+        "fiscal period; PubTracker's dates are shown only for audit. Matching is by title only (PubTracker has "
+        "no DOI or PMID). Sidebar filters do not apply to this tab."
+    )
+    missing_files = [path for path in PUBTRACKER_PATHS if not path.exists()]
+    if missing_files:
+        st.error(f"PubTracker export not found: {', '.join(str(path) for path in missing_files)}")
+        return
+
+    publications = dataset.publications
+    pt_mtimes = tuple(path.stat().st_mtime for path in PUBTRACKER_PATHS)
+    pubtracker = cached_pubtracker(tuple(str(path) for path in PUBTRACKER_PATHS), pt_mtimes)
+    pub_facilities = facility_map(dataset.facility_matches)
+
+    options = quarter_options(publications)
+    period = st.radio("Period", list(options), horizontal=True, key="d2p_period")
+    start, end = options[period]
+    end = end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+    threshold = st.slider(
+        "Fuzzy title match threshold (%)", min_value=70, max_value=100, value=90, step=1, key="d2p_threshold",
+        help="Titles not matched exactly are accepted when similarity is at least this value and the facilities agree.",
+    )
+
+    scoped, stats = filter_fiscal_year(publications, start, end)
+    reasons = exclusion_reasons(publications, start, end)
+    reasons_by_id = dict(zip(publications["Publication ID"], reasons))
+
+    data_key = f"{DATA_PATH.stat().st_mtime}|{pt_mtimes}"
+    results = cached_match(float(threshold), f"{data_key}|d2p|{period}", scoped, pub_facilities, pubtracker)
+    reverse = cached_reverse_match(float(threshold), data_key, pubtracker, publications, pub_facilities)
+    pt_rows = classify_pubtracker_rows(reverse, reasons_by_id)
+
+    found = results["Match Type"].ne("Missing")
+    exact = int(results["Match Type"].eq("Matched (exact)").sum())
+    fuzzy_count = int(results["Match Type"].eq("Matched (fuzzy)").sum())
+    exceptions = pt_rows[pt_rows["Status"].eq("Exception")]
+    excluded = pt_rows[pt_rows["Status"].eq("Matched but excluded")]
+
+    row1 = st.columns(4)
+    row1[0].metric(f"Eligible Dimensions ({period})", f"{len(results):,}")
+    row1[1].metric("Found in PubTracker", f"{int(found.sum()):,}", f"{exact:,} exact / {fuzzy_count:,} fuzzy", delta_color="off")
+    row1[2].metric(NOT_IN_PUBTRACKER, f"{int((~found).sum()):,}")
+    row1[3].metric("Overall submission rate", f"{found.mean() * 100:.1f}%" if len(results) else "N/A")
+    row2 = st.columns(4)
+    row2[0].metric("PubTracker publication rows", f"{len(pt_rows):,}")
+    row2[1].metric("Matched to eligible Dimensions", f"{int(pt_rows['Status'].eq('Matched (eligible)').sum()):,}")
+    row2[2].metric("Matched but excluded", f"{len(excluded):,}")
+    row2[3].metric("PubTracker exceptions", f"{len(exceptions):,}")
+    st.caption(
+        f"{stats['source_records']:,} source records: excluded {stats['excluded_document_type']:,} conference abstracts/corrections, "
+        f"{stats['excluded_publication_type']:,} preprints, chapters, proceedings, books, monographs or seminars, "
+        f"{stats['excluded_undated_or_year_only']:,} with a year-only or missing date (never replaced by PubTracker's date), "
+        f"{stats['excluded_out_of_range']:,} outside {start:%Y-%m-%d} to {end:%Y-%m-%d}. "
+        f"Eligible {len(results):,} = found {int(found.sum()):,} + not in PubTracker {int((~found).sum()):,}. "
+        "Exceptions are PubTracker rows with no match anywhere in the prepared Dimensions set; rows matching an "
+        "excluded Dimensions record are listed separately. A record with several facilities counts toward each."
+    )
+    if scoped.empty:
+        st.info("No eligible Dimensions records fall in the selected period.")
+        return
+
+    left, right = st.columns([1.6, 1])
+    with left:
+        st.subheader("Submission rate by facility")
+        rates = facility_rates(results, pub_facilities).rename(columns={"Missing": NOT_IN_PUBTRACKER})
+        st.dataframe(
+            rates, use_container_width=True, hide_index=True, height=420,
+            column_config={"Submission Rate %": st.column_config.ProgressColumn("Submission Rate %", min_value=0, max_value=100, format="%.1f%%")},
+        )
+        st.download_button("Download facility rates", _csv(rates), file_name="dimensions_to_pubtracker_facility_rates.csv", mime="text/csv", key="d2p_dl_rates")
+    with right:
+        st.subheader("Submission rate by fiscal quarter")
+        st.caption("Quarter assigned by the Dimensions date.")
+        quarters = quarter_rates(results, scoped)
+        st.dataframe(quarters, use_container_width=True, hide_index=True)
+        bar_chart(quarters, "Fiscal Period", "Submission Rate %")
+
+    st.subheader("Records not in PubTracker by facility")
+    selected = st.selectbox("Facility", rates["Facility"].tolist(), key="d2p_facility")
+    missing_ids = set(results.loc[~found, "Publication ID"])
+    in_facility = scoped["Publication ID"].map(
+        lambda pub_id: selected in pub_facilities[pub_id] if pub_facilities.get(pub_id) else selected == UNATTRIBUTED
+    )
+    columns = ["Title", "Canonical Date", "Document Type", "Publication Type", "Source title", "Matched Facilities", "DOI Link", "PubMed Link", "Publication ID"]
+    columns = [column for column in columns if column in scoped]
+    is_missing = scoped["Publication ID"].isin(missing_ids)
+    not_found = scoped[is_missing]
+    facility_missing = _format_dates(scoped[is_missing & in_facility][columns], ["Canonical Date"])
+    st.caption(f"{len(facility_missing):,} eligible Dimensions records for this facility were not found in PubTracker.")
+    st.dataframe(
+        facility_missing, use_container_width=True, hide_index=True, height=380,
+        column_config={"DOI Link": st.column_config.LinkColumn("DOI"), "PubMed Link": st.column_config.LinkColumn("PubMed")},
+    )
+    download_cols = st.columns(2)
+    download_cols[0].download_button(
+        "Download this facility's records", _csv(facility_missing),
+        file_name=f"not_in_pubtracker_{selected[:40].replace(' ', '_')}.csv", mime="text/csv", key="d2p_dl_facility",
+    )
+    download_cols[1].download_button(
+        "Download all records not in PubTracker", _csv(_format_dates(not_found[columns], ["Canonical Date"])),
+        file_name="dimensions_not_in_pubtracker.csv", mime="text/csv", key="d2p_dl_all_missing",
+    )
+
+    st.subheader("Matched records (Dimensions date replaces PubTracker date)")
+    matched = _format_dates(
+        matched_records_table(results, scoped, pubtracker, pub_facilities),
+        ["Dimensions Date", "PubTracker Date Created", "PubTracker Publication Date"],
+    )
+    st.dataframe(matched, use_container_width=True, hide_index=True, height=380)
+    st.download_button("Download matched records", _csv(matched), file_name="dimensions_pubtracker_matched.csv", mime="text/csv", key="d2p_dl_matched")
+
+    fuzzy = results[results["Match Type"].eq("Matched (fuzzy)")].merge(
+        scoped[["Publication ID", "Title"]], on="Publication ID"
+    )[["Title", "PubTracker Title", "Match Score", "PubTracker Facility", "PubTracker Record ID", "Publication ID"]]
+    with st.expander(f"Review fuzzy matches ({len(fuzzy):,})"):
+        st.dataframe(fuzzy.sort_values("Match Score"), use_container_width=True, hide_index=True, height=360)
+
+    pt_columns = ["Record ID", "Title", "Date Created", "Publication Date", "POC Medical Center"]
+    with st.expander(f"PubTracker exceptions: no Dimensions match ({len(exceptions):,})"):
+        coverage_start, coverage_end = publications["Canonical Date"].min(), publications["Canonical Date"].max()
+        pt_date = exceptions["Publication Date"].fillna(exceptions["Date Created"])
+        exceptions = exceptions.assign(**{"PubTracker Date In Dimensions Coverage": pt_date.between(coverage_start, coverage_end)})
+        inside = int(exceptions["PubTracker Date In Dimensions Coverage"].sum())
+        st.caption(
+            f"The Dimensions file covers {coverage_start:%Y-%m-%d} to {coverage_end:%Y-%m-%d}. {len(exceptions) - inside:,} exceptions "
+            f"have a PubTracker date outside that window and cannot match; {inside:,} fall inside it and need review."
+        )
+        exception_table = _format_dates(
+            exceptions[pt_columns + ["PubTracker Date In Dimensions Coverage"]], ["Date Created", "Publication Date"]
+        )
+        st.dataframe(exception_table, use_container_width=True, hide_index=True, height=360)
+        st.download_button("Download exceptions", _csv(exception_table), file_name="pubtracker_exceptions.csv", mime="text/csv", key="d2p_dl_exceptions")
+    with st.expander(f"PubTracker rows matched to an excluded Dimensions record ({len(excluded):,})"):
+        excluded_table = _format_dates(
+            excluded[pt_columns + ["Dimensions Publication ID", "Match Type", "Match Score", "Exclusion Reason"]],
+            ["Date Created", "Publication Date"],
+        )
+        st.dataframe(excluded_table, use_container_width=True, hide_index=True, height=360)
+        st.download_button("Download matched-but-excluded", _csv(excluded_table), file_name="pubtracker_matched_but_excluded.csv", mime="text/csv", key="d2p_dl_excluded")
+
+
 if not DATA_PATH.exists():
     st.error("The merged Dimensions file is missing. Run run_dimensions_export.bat first.")
     st.stop()
@@ -599,8 +768,8 @@ if filtered_publications.empty:
     st.warning("No publications match the current filters. Reset or broaden the filters to continue.")
     st.stop()
 
-overview_tab, records_tab, facilities_tab, ord_tab, impact_tab, compliance_tab = st.tabs([
-    "Overview", "Records", "Facilities", "ORD Portfolios", "Research impact", COMPLIANCE_TAB_TITLE,
+overview_tab, records_tab, facilities_tab, ord_tab, impact_tab, compliance_tab, d2p_tab = st.tabs([
+    "Overview", "Records", "Facilities", "ORD Portfolios", "Research impact", COMPLIANCE_TAB_TITLE, DIM_TO_PT_TAB_TITLE,
 ])
 with overview_tab:
     render_overview(filtered_publications, filtered_matches)
@@ -614,3 +783,5 @@ with impact_tab:
     render_impact(filtered_publications)
 with compliance_tab:
     render_pubtracker_compliance(dataset)
+with d2p_tab:
+    render_dimensions_to_pubtracker(dataset)

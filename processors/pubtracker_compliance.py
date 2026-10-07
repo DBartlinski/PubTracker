@@ -60,10 +60,10 @@ def load_pubtracker_files(paths: list[str | Path], station_lookup: dict[str, set
         lambda value: frozenset(station_lookup.get(str(value).strip().removesuffix(".0"), set()))
     )
     raw["Date Created"] = pd.to_datetime(raw["Date Created"], errors="coerce", format="mixed")
-    publication_date = pd.to_datetime(raw["Publication Date"], errors="coerce", format="mixed")
-    raw["PubTracker Date"] = publication_date.fillna(raw["Date Created"])
-    raw["PubTracker Date Source"] = np.where(publication_date.notna(), "Publication Date", "Date Created")
-    return raw[PUBTRACKER_COLUMNS + ["PubTracker Date", "PubTracker Date Source", "_norm_title", "_facilities"]]
+    raw["Publication Date"] = pd.to_datetime(raw["Publication Date"], errors="coerce", format="mixed")
+    raw["PubTracker Date"] = raw["Publication Date"].fillna(raw["Date Created"])
+    raw["PubTracker Date Source"] = np.where(raw["Publication Date"].notna(), "Publication Date", "Date Created")
+    return raw[PUBTRACKER_COLUMNS + ["Publication Date", "PubTracker Date", "PubTracker Date Source", "_norm_title", "_facilities"]]
 
 
 def quarter_options(publications: pd.DataFrame, fiscal_year: int = 26) -> dict[str, tuple[pd.Timestamp, pd.Timestamp]]:
@@ -78,29 +78,50 @@ def quarter_options(publications: pd.DataFrame, fiscal_year: int = 26) -> dict[s
     return options
 
 
+REASON_DOCUMENT_TYPE = "Conference abstract / correction"
+REASON_PUBLICATION_TYPE = "Non-publication type"
+REASON_UNDATED = "Year-only or missing date"
+REASON_OUT_OF_RANGE = "Outside selected period"
+
+
+def exclusion_reasons(
+    publications: pd.DataFrame,
+    start: pd.Timestamp = FY26_START,
+    end: pd.Timestamp = FY26_END,
+) -> pd.Series:
+    """First failing eligibility rule per record ('' = eligible and dated within [start, end])."""
+    sop_eligible = publications["SOP Eligible"].astype(bool)
+    if "Publication Type" in publications.columns:
+        publication_type = publications["Publication Type"].fillna("").astype(str).str.strip()
+        is_publication = ~publication_type.str.lower().isin(NON_PUBLICATION_TYPES)
+    else:
+        publication_type = pd.Series("", index=publications.index)
+        is_publication = pd.Series(True, index=publications.index)
+    dated = publications["Canonical Date"].notna() & publications["Date Precision"].ne("year")
+    in_range = publications["Canonical Date"].between(start, end)
+    reasons = pd.Series("", index=publications.index, dtype=object)
+    reasons[~in_range] = REASON_OUT_OF_RANGE
+    reasons[~dated] = REASON_UNDATED
+    reasons[~is_publication] = REASON_PUBLICATION_TYPE + ": " + publication_type[~is_publication]
+    reasons[~sop_eligible] = REASON_DOCUMENT_TYPE
+    return reasons
+
+
 def filter_fiscal_year(
     publications: pd.DataFrame,
     start: pd.Timestamp = FY26_START,
     end: pd.Timestamp = FY26_END,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     """Keep published-item records dated within [start, end]; year-only dates cannot be placed."""
-    sop_eligible = publications["SOP Eligible"].astype(bool)
-    if "Publication Type" in publications.columns:
-        publication_type = publications["Publication Type"].fillna("").astype(str).str.strip().str.lower()
-        is_publication = ~publication_type.isin(NON_PUBLICATION_TYPES)
-    else:
-        is_publication = pd.Series(True, index=publications.index)
-    eligible = sop_eligible & is_publication
-    dated = publications["Canonical Date"].notna() & publications["Date Precision"].ne("year")
-    in_range = publications["Canonical Date"].between(start, end)
+    reasons = exclusion_reasons(publications, start, end)
     stats = {
         "source_records": len(publications),
-        "excluded_document_type": int((~sop_eligible).sum()),
-        "excluded_publication_type": int((sop_eligible & ~is_publication).sum()),
-        "excluded_undated_or_year_only": int((eligible & ~dated).sum()),
-        "excluded_out_of_range": int((eligible & dated & ~in_range).sum()),
+        "excluded_document_type": int(reasons.eq(REASON_DOCUMENT_TYPE).sum()),
+        "excluded_publication_type": int(reasons.str.startswith(REASON_PUBLICATION_TYPE).sum()),
+        "excluded_undated_or_year_only": int(reasons.eq(REASON_UNDATED).sum()),
+        "excluded_out_of_range": int(reasons.eq(REASON_OUT_OF_RANGE).sum()),
     }
-    scoped = publications[eligible & dated & in_range].copy()
+    scoped = publications[reasons.eq("")].copy()
     stats["in_scope"] = len(scoped)
     return scoped, stats
 
@@ -112,24 +133,22 @@ def facility_map(matches: pd.DataFrame) -> dict[str, frozenset[str]]:
     }
 
 
-def match_to_pubtracker(
-    publications: pd.DataFrame,
-    pub_facilities: dict[str, frozenset[str]],
-    pubtracker: pd.DataFrame,
-    threshold: float = 90.0,
-) -> pd.DataFrame:
-    """Tag each Dimensions record Matched (exact) / Matched (fuzzy) / Missing."""
-    pt_titles = pubtracker["_norm_title"].tolist()
+def _best_matches(
+    query_titles: list[str],
+    query_facilities: list[frozenset[str]],
+    target_titles: list[str],
+    target_facilities: list[frozenset[str]],
+    threshold: float,
+    chunk_size: int = 500,
+) -> dict[int, tuple[str, float, int]]:
+    """Exact normalized-title match, else best fuzzy match whose facilities overlap (or one side has none)."""
     exact_index: dict[str, int] = {}
-    for position, title in enumerate(pt_titles):
+    for position, title in enumerate(target_titles):
         exact_index.setdefault(title, position)
 
-    pub_ids = publications["Publication ID"].tolist()
-    pub_titles = publications["Title"].map(_normalize_title).tolist()
     results: dict[int, tuple[str, float, int]] = {}
-
     pending = []
-    for i, title in enumerate(pub_titles):
+    for i, title in enumerate(query_titles):
         if not title:
             continue
         if title in exact_index:
@@ -137,26 +156,46 @@ def match_to_pubtracker(
         else:
             pending.append(i)
 
-    if pending and pt_titles:
+    if not target_titles:
+        return results
+    for offset in range(0, len(pending), chunk_size):
+        chunk = pending[offset:offset + chunk_size]
         scores = process.cdist(
-            [pub_titles[i] for i in pending],
-            pt_titles,
+            [query_titles[i] for i in chunk],
+            target_titles,
             scorer=fuzz.ratio,
             dtype=np.float32,
             score_cutoff=threshold,
             workers=-1,
         )
-        pt_facilities = pubtracker["_facilities"].tolist()
-        for row, i in enumerate(pending):
+        for row, i in enumerate(chunk):
             candidates = np.flatnonzero(scores[row] >= threshold)
             if candidates.size == 0:
                 continue
-            own = pub_facilities.get(pub_ids[i], frozenset())
+            own = query_facilities[i]
             for position in candidates[np.argsort(-scores[row][candidates], kind="stable")]:
-                theirs = pt_facilities[position]
+                theirs = target_facilities[position]
                 if not own or not theirs or own & theirs:
                     results[i] = ("Matched (fuzzy)", float(scores[row][position]), int(position))
                     break
+    return results
+
+
+def match_to_pubtracker(
+    publications: pd.DataFrame,
+    pub_facilities: dict[str, frozenset[str]],
+    pubtracker: pd.DataFrame,
+    threshold: float = 90.0,
+) -> pd.DataFrame:
+    """Tag each Dimensions record Matched (exact) / Matched (fuzzy) / Missing."""
+    pub_ids = publications["Publication ID"].tolist()
+    results = _best_matches(
+        publications["Title"].map(_normalize_title).tolist(),
+        [pub_facilities.get(pub_id, frozenset()) for pub_id in pub_ids],
+        pubtracker["_norm_title"].tolist(),
+        pubtracker["_facilities"].tolist(),
+        threshold,
+    )
 
     rows = []
     for i, pub_id in enumerate(pub_ids):
@@ -191,3 +230,84 @@ def facility_rates(
     summary["Missing"] = summary["Dimensions Records"] - summary["In PubTracker"]
     summary["Submission Rate %"] = (summary["In PubTracker"] / summary["Dimensions Records"] * 100).round(1)
     return summary.sort_values(["Missing", "Dimensions Records"], ascending=False).reset_index(drop=True)
+
+
+def quarter_rates(results: pd.DataFrame, scoped: pd.DataFrame) -> pd.DataFrame:
+    """Submission rate per fiscal period, assigned by the Dimensions date only."""
+    frame = results[["Publication ID", "Match Type"]].merge(
+        scoped[["Publication ID", "Fiscal Period"]], on="Publication ID", how="left"
+    )
+    frame["Found"] = frame["Match Type"].ne("Missing")
+    summary = frame.groupby("Fiscal Period").agg(
+        **{"Dimensions Records": ("Found", "size"), "In PubTracker": ("Found", "sum")}
+    ).reset_index()
+    summary["Not in PubTracker"] = summary["Dimensions Records"] - summary["In PubTracker"]
+    summary["Submission Rate %"] = (summary["In PubTracker"] / summary["Dimensions Records"] * 100).round(1)
+    return summary.sort_values("Fiscal Period").reset_index(drop=True)
+
+
+def matched_records_table(
+    results: pd.DataFrame,
+    scoped: pd.DataFrame,
+    pubtracker: pd.DataFrame,
+    pub_facilities: dict[str, frozenset[str]],
+) -> pd.DataFrame:
+    """Matched records with the Dimensions date as the published date; PubTracker dates kept for audit."""
+    matched = results[results["Match Type"].ne("Missing")]
+    dims = scoped[["Publication ID", "Title", "Canonical Date"]].rename(columns={"Canonical Date": "Dimensions Date"})
+    pt = pubtracker[["Record ID", "Date Created", "Publication Date"]].drop_duplicates("Record ID").rename(columns={
+        "Record ID": "PubTracker Record ID",
+        "Date Created": "PubTracker Date Created",
+        "Publication Date": "PubTracker Publication Date",
+    })
+    table = matched[["Publication ID", "PubTracker Record ID", "Match Type", "Match Score"]].merge(
+        dims, on="Publication ID", how="left"
+    ).merge(pt, on="PubTracker Record ID", how="left")
+    table["Facilities"] = table["Publication ID"].map(
+        lambda pub_id: "; ".join(sorted(pub_facilities.get(pub_id, ()))) or UNATTRIBUTED
+    )
+    return table[[
+        "Publication ID", "Title", "Dimensions Date", "PubTracker Record ID", "PubTracker Date Created",
+        "PubTracker Publication Date", "Match Type", "Match Score", "Facilities",
+    ]].reset_index(drop=True)
+
+
+def match_pubtracker_to_dimensions(
+    pubtracker: pd.DataFrame,
+    publications: pd.DataFrame,
+    pub_facilities: dict[str, frozenset[str]],
+    threshold: float = 90.0,
+) -> pd.DataFrame:
+    """Match every PubTracker row against the full prepared Dimensions set (not just eligible records)."""
+    pub_ids = publications["Publication ID"].tolist()
+    results = _best_matches(
+        pubtracker["_norm_title"].tolist(),
+        pubtracker["_facilities"].tolist(),
+        publications["Title"].map(_normalize_title).tolist(),
+        [pub_facilities.get(pub_id, frozenset()) for pub_id in pub_ids],
+        threshold,
+    )
+    rows = []
+    for i in range(len(pubtracker)):
+        match_type, score, position = results.get(i, ("", 0.0, -1))
+        rows.append({
+            "Dimensions Publication ID": pub_ids[position] if position >= 0 else "",
+            "Match Type": match_type,
+            "Match Score": score,
+        })
+    matches = pd.DataFrame(rows, index=pubtracker.index)
+    columns = ["Record ID", "Title", "Date Created", "Publication Date", "POC Medical Center"]
+    return pd.concat([pubtracker[columns], matches], axis=1).reset_index(drop=True)
+
+
+def classify_pubtracker_rows(reverse: pd.DataFrame, reasons_by_id: dict[str, str]) -> pd.DataFrame:
+    """Label each PubTracker row Matched (eligible) / Matched but excluded / Exception."""
+    frame = reverse.copy()
+    matched = frame["Dimensions Publication ID"].ne("")
+    frame["Exclusion Reason"] = frame["Dimensions Publication ID"].map(reasons_by_id).fillna("").where(matched, "")
+    frame["Status"] = np.select(
+        [~matched, frame["Exclusion Reason"].ne("")],
+        ["Exception", "Matched but excluded"],
+        default="Matched (eligible)",
+    )
+    return frame
