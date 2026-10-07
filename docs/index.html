@@ -85,6 +85,60 @@
       Dimensions; PubTracker's submission and publication dates are not used. A publication linked to several facilities counts
       toward each facility.
     </div>
+
+    <details class="mb-3" open>
+      <summary class="fw-semibold" style="cursor:pointer">How these numbers are pulled and how to read them</summary>
+      <div class="small mt-2">
+        <p class="mb-1"><strong>Where the numbers come from</strong></p>
+        <ul>
+          <li><strong>Dimensions (the baseline):</strong> VA-affiliated publications from the VA Dimensions export for fiscal year 2026
+            (Oct 1, 2025 &ndash; Sep 30, 2026). Dimensions is treated as the complete list; every publication entered in PubTracker
+            should also be in Dimensions, but not the other way around.</li>
+          <li><strong>What counts:</strong> journal publications only. Conference abstracts, corrections, preprints, book chapters,
+            proceedings, books, monographs and seminars are left out, as are records with only a publication year and no exact date
+            (those cannot be placed in a quarter).</li>
+          <li><strong>Dates:</strong> each publication is placed in a fiscal quarter by its <em>Dimensions</em> publication date
+            (print date, then online date, then general publication date). PubTracker's submission and publication dates are
+            never used, because they are often missing or inaccurate.</li>
+          <li><strong>PubTracker:</strong> all submissions of type <em>publication</em> from the 2025 and 2026 PubTracker exports
+            (pulled Oct 5, 2026).</li>
+          <li><strong>Facility:</strong> a Dimensions publication is assigned to a VA facility from the organization names in its author
+            affiliations. National umbrella organizations (VA Central Office / station 101) are not counted as a facility.</li>
+          <li><strong>Funding:</strong> <em>ORD funded</em>, <em>VA grant codes</em> and <em>ORD portfolio</em> are detected from VA award
+            prefixes and service names in the Dimensions funding and acknowledgement text (CX = CSR&amp;D, BX = BLR&amp;D, RX = RR&amp;D,
+            HX = HSR&amp;D, plus QUERI and CSP). <em>Funders</em> and <em>Grant numbers</em> are the funders and awards Dimensions lists.</li>
+        </ul>
+
+        <p class="mb-1"><strong>How publications are matched to PubTracker</strong></p>
+        <p>The two systems share no DOI or PubMed ID, so publications are matched by title. Titles are lower-cased and stripped of
+          punctuation first. An identical title is a match. Otherwise a PubTracker title that is at least 90% similar also counts,
+          but only if the facilities agree (same facility, or one side has no facility). A Dimensions publication with no match is
+          counted as <em>not in PubTracker</em>.</p>
+
+        <p class="mb-1"><strong>Reading the results</strong></p>
+        <ul>
+          <li><strong>Compliance %</strong> = publications entered in PubTracker &divide; Dimensions publications for the chosen period.
+            <em>Not in PubTracker</em> + <em>Entered in PubTracker</em> always equals <em>Dimensions publications</em>.</li>
+          <li><strong>Period:</strong> pick the whole year or one quarter. A publication belongs to the quarter of its Dimensions date and
+            counts as entered if any PubTracker submission matches it, whenever that submission was made.</li>
+          <li><strong>Compliance by facility:</strong> sorted by the most publications not in PubTracker. A publication with several
+            facilities counts toward each one, so facility rows add up to more than the overall total.</li>
+          <li><strong>Unattributed (no VAMC match)</strong> holds publications whose affiliations did not map to a known facility. They
+            count in the overall total but belong to no facility.</li>
+          <li><strong>Publication drill-down:</strong> click facilities in the table to narrow the list, then filter by funding, ORD
+            portfolio or search text. Switch between <em>Not in PubTracker</em> and <em>In PubTracker</em>. Click a row for details;
+            the download includes every row that matches your selection.</li>
+          <li><strong>Funding filter:</strong> <em>ORD-funded</em> narrows the list to publications with VA grant evidence, usually the
+            ones most expected to be in PubTracker.</li>
+        </ul>
+
+        <p class="mb-0 text-muted"><strong>Keep in mind:</strong> Dimensions lists all VA-affiliated publications, not only those
+          required in PubTracker, so a low rate shows a gap to look into, not proof of non-compliance. Matching is by title only, so a
+          paper whose title changed between submission and publication can be missed. Facility and funding tags are inferred from text
+          and can be incomplete. Check the listed publications before acting on them.</p>
+      </div>
+    </details>
+
     <div class="row g-3 align-items-end mb-3">
       <div class="col-auto">
         <label class="form-label small mb-1" for="b02Period">Period</label>
@@ -149,104 +203,6 @@
         <table class="table table-sm table-hover mb-0" style="font-size:0.82rem">
           <thead><tr><th>Dimensions date</th><th>Facility</th><th>Title</th><th>Journal</th><th>ORD funded</th><th>VA grant codes</th><th>Funders</th><th>Grant numbers</th><th>Links</th></tr></thead>
           <tbody id="b02ListBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Dimensions-PubTracker compliance (precomputed, slider-adjustable) ── -->
-  <div class="mt-3 mb-4" id="ptgapSection">
-    <h2 class="h4 mb-2">Dimensions-PubTracker Complience Oct 2026</h2>
-    <div class="alert alert-info small mb-3">
-      <strong>What this page shows.</strong> It treats VA Dimensions as the complete record of VA-affiliated publications
-      and PubTracker as the user-submitted supplement being checked. For each facility it reports how many Dimensions
-      publications also appear in PubTracker (the <em>submission rate</em>) and lists the ones that do not, so you can see
-      what may be missing from PubTracker.
-    </div>
-
-    <details class="mb-3" open>
-      <summary class="fw-semibold" style="cursor:pointer">How the data is used and how to read it</summary>
-      <div class="small mt-2">
-        <p class="mb-1"><strong>Where the numbers come from</strong></p>
-        <ul>
-          <li><strong>Dimensions:</strong> VA-affiliated publications from the VA Dimensions export, for fiscal year 2026
-            (Oct 1, 2025 – Sep 30, 2026). Only published items are counted: conference abstracts, corrections, preprints,
-            book chapters, proceedings and books are left out, as are records with only a
-            publication year and no exact date. Each record is placed in a fiscal quarter by its publication date.</li>
-          <li><strong>PubTracker:</strong> submissions of type <em>publication</em> from the 2025 and 2026 PubTracker exports
-            (pulled Oct 5, 2026). PubTracker's own dates are not used, because many submissions have no publication date:
-            every submission is compared with the Dimensions records, and the Dimensions publication date decides the period.</li>
-          <li><strong>Facility:</strong> a Dimensions record is assigned to a facility from the organization names in its
-            affiliations. A PubTracker submission is assigned from its point-of-contact station number.</li>
-        </ul>
-
-        <p class="mb-1"><strong>How records are matched</strong></p>
-        <p>The two systems share no ID, so records are matched by title. Titles are lower-cased and stripped of punctuation first.
-          An identical title is an <em>exact</em> match. Otherwise the closest PubTracker title counts as a <em>fuzzy</em> match
-          if its similarity is at or above the slider value <em>and</em> the facilities agree (the same facility, or one side has
-          no facility). A Dimensions record with no match is counted as <em>missing</em>.</p>
-
-        <p class="mb-1"><strong>The slider</strong></p>
-        <ul>
-          <li><strong>100%</strong> allows exact matches only. This is the strictest setting: fewest records found, most missing.</li>
-          <li><strong>Lower values</strong> also accept near-identical titles, such as different punctuation or a small wording change.
-            More records are found, but the chance of a wrong match grows. The default is 90%, and the minimum is 70%.</li>
-          <li>Watch the <em>Exact / fuzzy</em> card: the exact count never changes with the slider, so the fuzzy count shows how
-            much the slider is adding. If a small move changes the results a lot, review the borderline titles by hand.</li>
-        </ul>
-
-        <p class="mb-1"><strong>Reading the results</strong></p>
-        <ul>
-          <li><strong>Overall submission rate</strong> = records found in PubTracker ÷ Dimensions records for the period.</li>
-          <li><strong>Facility table:</strong> sorted by most missing records. <em>Submission rate</em> is that facility's found ÷ total.
-            Click a row to list its missing records, with DOI, PubMed and Dimensions links, and download them as CSV.</li>
-          <li>A publication with several facilities counts toward each one, so facility rows add up to more than the overall total.</li>
-          <li><em>Unattributed</em> holds records whose affiliations did not map to a known facility. They count in the overall
-            total but belong to no facility.</li>
-          <li><strong>Period:</strong> choose the whole year or one quarter. A Dimensions record belongs to the period of its
-            publication date, and it counts as found if any PubTracker submission matches it, whenever that was submitted or dated.</li>
-        </ul>
-
-        <p class="mb-0 text-muted"><strong>Keep in mind:</strong> Dimensions lists all VA-affiliated publications, not only those
-          required in PubTracker, so a low rate shows a gap to investigate, not proof of non-compliance. Matching is by title only,
-          so a retitled paper can be missed. Check the listed records before acting on them.</p>
-      </div>
-    </details>
-
-    <div class="row g-3 align-items-end mb-3">
-      <div class="col-auto">
-        <label class="form-label small mb-1" for="ptgapPeriod">Period</label>
-        <select id="ptgapPeriod" class="form-select form-select-sm"></select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small mb-1" for="ptgapThreshold">Fuzzy title match threshold: <strong id="ptgapThresholdValue">90%</strong> <span class="text-muted">(100% = exact titles only)</span></label>
-        <input type="range" class="form-range" id="ptgapThreshold" min="70" max="100" step="1" value="90">
-      </div>
-    </div>
-    <div class="row g-2 mb-2" id="ptgapMetrics"></div>
-    <div class="small text-muted mb-2" id="ptgapNote"></div>
-    <div class="border rounded bg-white p-2 mb-3">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <strong>Submission rate by facility</strong>
-        <span class="small text-muted">Click a row to list its missing records</span>
-        <button class="btn btn-sm btn-outline-primary" id="btnDownloadPtgapCsv">⬇ Download CSV</button>
-      </div>
-      <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
-        <table class="table table-sm table-hover mb-0">
-          <thead><tr><th>Facility</th><th>Dimensions records</th><th>In PubTracker</th><th>Missing</th><th>Submission rate</th></tr></thead>
-          <tbody id="ptgapBody"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="border rounded bg-white p-2 mb-3 d-none" id="ptgapDetail">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <strong id="ptgapDetailTitle"></strong>
-        <button class="btn btn-sm btn-outline-primary" id="btnDownloadPtgapMissingCsv">⬇ Download CSV</button>
-      </div>
-      <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
-        <table class="table table-sm mb-0">
-          <thead><tr><th>Title</th><th>Date</th><th>Journal</th><th>Links</th></tr></thead>
-          <tbody id="ptgapDetailBody"></tbody>
         </table>
       </div>
     </div>
@@ -371,7 +327,6 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="app.js?v=20261005"></script>
-<script src="ptgap.js?v=20261005"></script>
-<script src="build02.js?v=20261007"></script>
+<script src="build02.js?v=20261007b"></script>
 </body>
 </html>
