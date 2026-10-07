@@ -13,7 +13,9 @@ from processors.pubtracker_compliance import (
     match_pubtracker_to_dimensions,
     match_to_pubtracker,
     matched_records_table,
+    not_in_pubtracker_by_facility,
     quarter_rates,
+    records_by_facility,
 )
 
 
@@ -180,6 +182,49 @@ class DimensionsToPubTrackerTests(unittest.TestCase):
         self.assertEqual(len(self.results), self.stats["in_scope"])
         self.assertEqual(len(self.results), int(found.sum()) + int((~found).sum()))
         self.assertEqual((int(found.sum()), int((~found).sum())), (1, 1))
+
+
+class NotInPubTrackerByFacilityTests(unittest.TestCase):
+    def test_long_form_sorted_by_dimensions_date(self):
+        scoped = pubs([
+            {"Publication ID": "p1", "Title": "Older multi-site", "Canonical Date": "2026-01-10"},
+            {"Publication ID": "p2", "Title": "Newer unattributed", "Canonical Date": "2026-05-01"},
+            {"Publication ID": "p3", "Title": "Matched", "Canonical Date": "2026-06-01"},
+        ])
+        results = pd.DataFrame({
+            "Publication ID": ["p1", "p2", "p3"],
+            "Match Type": ["Missing", "Missing", "Matched (exact)"],
+        })
+        facilities = {"p1": frozenset({"B", "A"}), "p3": frozenset({"A"})}
+        listing = not_in_pubtracker_by_facility(results, scoped, facilities)
+        self.assertEqual(listing["Publication ID"].tolist(), ["p2", "p1", "p1"])
+        self.assertEqual(listing["Facility"].tolist(), [UNATTRIBUTED, "A", "B"])
+        self.assertEqual(listing["Dimensions Date"].iloc[0], pd.Timestamp("2026-05-01"))
+
+    def test_in_pubtracker_records_carry_match_and_funding(self):
+        scoped = pubs([
+            {"Publication ID": "p1", "Title": "Funded", "Canonical Date": "2026-02-01",
+             "Has ORD Funding Evidence": True, "ORD Broad Portfolio Codes": "CX",
+             "Supporting Grants": "I01CX001234", "Funder": "VA ORD"},
+            {"Publication ID": "p2", "Title": "Missing", "Canonical Date": "2026-03-01",
+             "Has ORD Funding Evidence": False, "ORD Broad Portfolio Codes": None,
+             "Supporting Grants": None, "Funder": None},
+        ])
+        results = pd.DataFrame({
+            "Publication ID": ["p1", "p2"],
+            "Match Type": ["Matched (fuzzy)", "Missing"],
+            "Match Score": [93.0, 0.0],
+            "PubTracker Record ID": ["42", ""],
+        })
+        entered = records_by_facility(results, scoped, {"p1": frozenset({"A"})}, in_pubtracker=True)
+        self.assertEqual(entered["Publication ID"].tolist(), ["p1"])
+        row = entered.iloc[0]
+        self.assertEqual((row["Match Type"], row["PubTracker Record ID"]), ("Matched (fuzzy)", "42"))
+        self.assertEqual((row["VA Grant Codes"], row["Grant Numbers"], row["Funders"]), ("CX", "I01CX001234", "VA ORD"))
+        self.assertTrue(row["ORD Funded"])
+        missing = records_by_facility(results, scoped, {}, in_pubtracker=False)
+        self.assertEqual(missing["Grant Numbers"].tolist(), [""])
+        self.assertNotIn("Match Type", missing.columns)
 
 
 if __name__ == "__main__":

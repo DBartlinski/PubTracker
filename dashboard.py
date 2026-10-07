@@ -22,8 +22,10 @@ from processors.pubtracker_compliance import (
     match_pubtracker_to_dimensions,
     match_to_pubtracker,
     matched_records_table,
+    not_in_pubtracker_by_facility,
     quarter_options,
     quarter_rates,
+    records_by_facility,
 )
 
 
@@ -33,7 +35,8 @@ PUBTRACKER_PATHS = [
     Path("PubTracker Export/submissionlist20261005132200-2026.xlsx"),
 ]
 COMPLIANCE_TAB_TITLE = "Dimensions-PubTracker Complience Oct 2026"
-DIM_TO_PT_TAB_TITLE = "Dimensions to PubTracker"
+DIM_TO_PT_TAB_TITLE = "Dimensions to PubTracker (Build 01)"
+BUILD_02_TAB_TITLE = "Not in PubTracker (Build 02)"
 NOT_IN_PUBTRACKER = "Not in PubTracker"
 ORD_NO_SIGNAL_LABEL = "No ORD signal detected"
 DERIVED_EXPORT_COLUMNS = [
@@ -752,6 +755,170 @@ def render_dimensions_to_pubtracker(dataset: DashboardDataset) -> None:
         st.download_button("Download matched-but-excluded", _csv(excluded_table), file_name="pubtracker_matched_but_excluded.csv", mime="text/csv", key="d2p_dl_excluded")
 
 
+def render_not_in_pubtracker_simple(dataset: DashboardDataset) -> None:
+    st.subheader("Dimensions publications not in PubTracker")
+    st.caption(
+        "Journal publications in Dimensions with an exact publication date in the chosen period that were not "
+        "found in PubTracker (matched by title). Sorted by the Dimensions publication date; PubTracker's "
+        "submission and publication dates are not used. A publication linked to several facilities is listed under each."
+    )
+    missing_files = [path for path in PUBTRACKER_PATHS if not path.exists()]
+    if missing_files:
+        st.error(f"PubTracker export not found: {', '.join(str(path) for path in missing_files)}")
+        return
+
+    pt_mtimes = tuple(path.stat().st_mtime for path in PUBTRACKER_PATHS)
+    pubtracker = cached_pubtracker(tuple(str(path) for path in PUBTRACKER_PATHS), pt_mtimes)
+    pub_facilities = facility_map(dataset.facility_matches)
+
+    options = quarter_options(dataset.publications)
+    period = st.radio("Period", list(options), horizontal=True, key="b02_period")
+    start, end = options[period]
+    scoped, _ = filter_fiscal_year(dataset.publications, start, end + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
+    if scoped.empty:
+        st.info("No eligible Dimensions publications fall in the selected period.")
+        return
+    # Same key as Build 01 so both tabs share one cached match.
+    results = cached_match(90.0, f"{DATA_PATH.stat().st_mtime}|{pt_mtimes}|d2p|{period}", scoped, pub_facilities, pubtracker)
+    not_found = int(results["Match Type"].eq("Missing").sum())
+    entered = len(results) - not_found
+
+    cols = st.columns(4)
+    cols[0].metric(f"Dimensions publications ({period})", f"{len(results):,}")
+    cols[1].metric("Entered in PubTracker", f"{entered:,}")
+    cols[2].metric("Not in PubTracker", f"{not_found:,}")
+    cols[3].metric("Compliance %", f"{entered / len(results) * 100:.1f}%", help="Entered in PubTracker ÷ Dimensions publications.")
+
+    listing = not_in_pubtracker_by_facility(results, scoped, pub_facilities)
+    entered_listing = records_by_facility(results, scoped, pub_facilities, in_pubtracker=True)
+    summary = facility_rates(results, pub_facilities).rename(columns={
+        "Dimensions Records": "Dimensions publications",
+        "In PubTracker": "Entered in PubTracker",
+        "Missing": "Not in PubTracker",
+        "Submission Rate %": "Compliance %",
+    })[["Facility", "Not in PubTracker", "Entered in PubTracker", "Dimensions publications", "Compliance %"]]
+
+    st.subheader("Compliance by facility")
+    st.caption("Click one or more facilities to drill into their publications below.")
+    facility_event = st.dataframe(
+        summary, use_container_width=True, hide_index=True, height=420,
+        on_select="rerun", selection_mode="multi-row", key="b02_facility_table",
+        column_config={"Compliance %": st.column_config.ProgressColumn("Compliance %", min_value=0, max_value=100, format="%.1f%%")},
+    )
+    st.download_button(
+        "Download facility compliance", _csv(summary), file_name="pubtracker_compliance_by_facility.csv",
+        mime="text/csv", key="b02_dl_summary",
+    )
+
+    st.subheader("Publication drill-down")
+    st.caption(
+        "Each row is one Dimensions publication at one facility, so a multi-facility publication appears once per "
+        "facility. Dates and fiscal quarters come from Dimensions. Funding columns come from Dimensions: "
+        "**VA Grant Codes** and **ORD Portfolio** are VA award prefixes (CX, BX, RX, HX, etc.) found in the funding text, "
+        "**Funders** and **Grant Numbers** are the funders and awards Dimensions lists. Blank means Dimensions has none. "
+        "Click a row to see its full details."
+    )
+    clicked = summary.iloc[facility_event.selection.rows]["Facility"].tolist() if facility_event.selection.rows else []
+    filter_cols = st.columns([2, 1, 1.4, 1.4, 1.6])
+    chosen = filter_cols[0].multiselect(
+        "Facility", summary["Facility"].tolist(), default=clicked, key=f"b02_facility_{'|'.join(clicked)}",
+        placeholder="All facilities",
+    )
+    quarters = filter_cols[1].multiselect(
+        "Fiscal quarter", sorted(scoped["Fiscal Period"].dropna().unique()), key="b02_quarter", placeholder="All",
+    )
+    funding = filter_cols[2].selectbox(
+        "Funding", ["All", "ORD-funded (VA grant evidence)", "Any grant listed", "No funding listed"], key="b02_funding",
+    )
+    portfolios = filter_cols[3].multiselect(
+        "ORD portfolio", tokens(scoped, "ORD Broad Portfolios"), key="b02_portfolio", placeholder="All",
+    )
+    query = filter_cols[4].text_input("Search", key="b02_search", placeholder="Title, journal, funder, grant")
+    filters = {"facilities": chosen, "quarters": quarters, "funding": funding, "portfolios": portfolios, "query": query}
+
+    missing_view = _filter_facility_records(listing, filters)
+    entered_view = _filter_facility_records(entered_listing, filters)
+    missing_tab, entered_tab = st.tabs([
+        f"Not in PubTracker ({missing_view['Publication ID'].nunique():,} publications)",
+        f"In PubTracker ({entered_view['Publication ID'].nunique():,} publications)",
+    ])
+    with missing_tab:
+        _render_facility_records(missing_view, "b02_missing", "dimensions_not_in_pubtracker_by_facility.csv", pub_facilities)
+    with entered_tab:
+        _render_facility_records(entered_view, "b02_entered", "dimensions_in_pubtracker_by_facility.csv", pub_facilities)
+
+
+def _filter_facility_records(frame: pd.DataFrame, filters: dict) -> pd.DataFrame:
+    mask = pd.Series(True, index=frame.index)
+    if filters["facilities"]:
+        mask &= frame["Facility"].isin(filters["facilities"])
+    if filters["quarters"]:
+        mask &= frame["Fiscal Period"].isin(filters["quarters"])
+    if filters["funding"] == "ORD-funded (VA grant evidence)":
+        mask &= frame["ORD Funded"]
+    elif filters["funding"] == "Any grant listed":
+        mask &= frame["Grant Numbers"].ne("") | frame["VA Grant Codes"].ne("")
+    elif filters["funding"] == "No funding listed":
+        mask &= frame["Grant Numbers"].eq("") & frame["VA Grant Codes"].eq("") & frame["Funders"].eq("")
+    if filters["portfolios"]:
+        wanted = set(filters["portfolios"])
+        mask &= frame["ORD Portfolio"].map(lambda value: bool(wanted & set(split_values(value))))
+    query = filters["query"].strip()
+    if query:
+        searchable = frame[["Title", "Journal", "Funders", "Grant Numbers", "VA Grant Codes"]].agg(" ".join, axis=1)
+        mask &= searchable.str.contains(query, case=False, regex=False)
+    return frame[mask].reset_index(drop=True)
+
+
+def _render_facility_records(frame: pd.DataFrame, key: str, file_name: str, pub_facilities: dict) -> None:
+    unique = frame["Publication ID"].nunique()
+    ord_funded = frame.drop_duplicates("Publication ID")["ORD Funded"].sum()
+    st.caption(
+        f"{unique:,} publications ({len(frame):,} facility rows); {ord_funded:,} with VA/ORD grant evidence. "
+        "Newest Dimensions publication date first."
+    )
+    shown = _format_dates(frame, ["Dimensions Date"])
+    event = st.dataframe(
+        shown, use_container_width=True, hide_index=True, height=440,
+        on_select="rerun", selection_mode="single-row", key=f"{key}_table",
+        column_config={
+            "ORD Funded": st.column_config.CheckboxColumn("ORD Funded"),
+            "DOI": st.column_config.LinkColumn("DOI", display_text="DOI"),
+            "PubMed": st.column_config.LinkColumn("PubMed", display_text="PubMed"),
+            "Dimensions URL": st.column_config.LinkColumn("Dimensions", display_text="Open"),
+            "Match Score": st.column_config.NumberColumn("Match Score", format="%.0f"),
+        },
+    )
+    st.download_button("Download this list", _csv(shown), file_name=file_name, mime="text/csv", key=f"{key}_dl")
+    if not event.selection.rows:
+        return
+    record = shown.iloc[event.selection.rows[0]]
+    with st.container(border=True):
+        st.markdown(f"**{record['Title']}**")
+        left, right = st.columns(2)
+        left.markdown(
+            f"**Dimensions date:** {record['Dimensions Date']} ({record['Fiscal Period']})  \n"
+            f"**Journal:** {record['Journal'] or '-'}  \n"
+            f"**Document type:** {record['Document Type'] or '-'}  \n"
+            f"**All facilities:** {'; '.join(sorted(pub_facilities.get(record['Publication ID'], ()))) or UNATTRIBUTED}"
+        )
+        right.markdown(
+            f"**ORD funded:** {'Yes' if record['ORD Funded'] else 'No evidence'}  \n"
+            f"**VA grant codes:** {record['VA Grant Codes'] or '-'}  \n"
+            f"**ORD portfolio:** {record['ORD Portfolio'] or '-'}  \n"
+            f"**Funders:** {record['Funders'] or '-'}  \n"
+            f"**Grant numbers:** {record['Grant Numbers'] or '-'}"
+        )
+        if "Match Type" in record:
+            st.markdown(
+                f"**PubTracker match:** {record['Match Type']}, score {record['Match Score']:.0f}, "
+                f"Record ID {record['PubTracker Record ID']}"
+            )
+        links = [f"[{label}]({record[column]})" for label, column in (("DOI", "DOI"), ("PubMed", "PubMed"), ("Dimensions", "Dimensions URL")) if record[column]]
+        if links:
+            st.markdown(" · ".join(links))
+
+
 if not DATA_PATH.exists():
     st.error("The merged Dimensions file is missing. Run run_dimensions_export.bat first.")
     st.stop()
@@ -768,8 +935,9 @@ if filtered_publications.empty:
     st.warning("No publications match the current filters. Reset or broaden the filters to continue.")
     st.stop()
 
-overview_tab, records_tab, facilities_tab, ord_tab, impact_tab, compliance_tab, d2p_tab = st.tabs([
-    "Overview", "Records", "Facilities", "ORD Portfolios", "Research impact", COMPLIANCE_TAB_TITLE, DIM_TO_PT_TAB_TITLE,
+overview_tab, records_tab, facilities_tab, ord_tab, impact_tab, compliance_tab, d2p_tab, b02_tab = st.tabs([
+    "Overview", "Records", "Facilities", "ORD Portfolios", "Research impact", COMPLIANCE_TAB_TITLE,
+    DIM_TO_PT_TAB_TITLE, BUILD_02_TAB_TITLE,
 ])
 with overview_tab:
     render_overview(filtered_publications, filtered_matches)
@@ -785,3 +953,5 @@ with compliance_tab:
     render_pubtracker_compliance(dataset)
 with d2p_tab:
     render_dimensions_to_pubtracker(dataset)
+with b02_tab:
+    render_not_in_pubtracker_simple(dataset)

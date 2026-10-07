@@ -246,6 +246,65 @@ def quarter_rates(results: pd.DataFrame, scoped: pd.DataFrame) -> pd.DataFrame:
     return summary.sort_values("Fiscal Period").reset_index(drop=True)
 
 
+FACILITY_RECORD_COLUMNS = [
+    "Dimensions Date", "Fiscal Period", "Facility", "Title", "Journal", "Document Type",
+    "ORD Funded", "VA Grant Codes", "ORD Portfolio", "Funders", "Grant Numbers",
+    "DOI", "PubMed", "Dimensions URL", "Publication ID",
+]
+MATCH_COLUMNS = ["Match Type", "Match Score", "PubTracker Record ID"]
+
+
+def _text(value) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def records_by_facility(
+    results: pd.DataFrame,
+    scoped: pd.DataFrame,
+    pub_facilities: dict[str, frozenset[str]],
+    in_pubtracker: bool = False,
+) -> pd.DataFrame:
+    """One row per (Dimensions record, facility) found / not found in PubTracker, newest Dimensions date first."""
+    found = results["Match Type"].ne("Missing")
+    selected = results[found if in_pubtracker else ~found].set_index("Publication ID")
+    records = scoped[scoped["Publication ID"].isin(selected.index)]
+    rows = []
+    for row in records.to_dict("records"):
+        pub_id = row["Publication ID"]
+        base = {
+            "Dimensions Date": row["Canonical Date"],
+            "Fiscal Period": _text(row.get("Fiscal Period")),
+            "Title": _text(row.get("Title")),
+            "Journal": _text(row.get("Source title")),
+            "Document Type": _text(row.get("Document Type")),
+            "ORD Funded": bool(row.get("Has ORD Funding Evidence", False)),
+            "VA Grant Codes": _text(row.get("ORD Broad Portfolio Codes")),
+            "ORD Portfolio": _text(row.get("ORD Broad Portfolios")),
+            "Funders": _text(row.get("Funder")),
+            "Grant Numbers": _text(row.get("Supporting Grants")),
+            "DOI": _text(row.get("DOI Link")),
+            "PubMed": _text(row.get("PubMed Link")),
+            "Dimensions URL": _text(row.get("Dimensions for Veterans Affairs URL")),
+            "Publication ID": pub_id,
+        }
+        if in_pubtracker:
+            match = selected.loc[pub_id]
+            base.update({column: match[column] for column in MATCH_COLUMNS})
+        for facility in sorted(pub_facilities.get(pub_id) or (UNATTRIBUTED,)):
+            rows.append({**base, "Facility": facility})
+    columns = FACILITY_RECORD_COLUMNS + (MATCH_COLUMNS if in_pubtracker else [])
+    frame = pd.DataFrame(rows, columns=columns)
+    return frame.sort_values(["Dimensions Date", "Facility"], ascending=[False, True]).reset_index(drop=True)
+
+
+def not_in_pubtracker_by_facility(
+    results: pd.DataFrame,
+    scoped: pd.DataFrame,
+    pub_facilities: dict[str, frozenset[str]],
+) -> pd.DataFrame:
+    return records_by_facility(results, scoped, pub_facilities, in_pubtracker=False)
+
+
 def matched_records_table(
     results: pd.DataFrame,
     scoped: pd.DataFrame,
